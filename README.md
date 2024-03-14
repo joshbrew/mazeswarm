@@ -5,7 +5,9 @@ Flowfields, Mazes, with Rapier physics + BablyonJS 3D
 
 Find the exit, escape the swarm! Use the map to help find the keys and the exit. 
 
-<img width="311" alt="Capture" src="./cap1.png">
+Click to go to youtube:
+[![yt](https://img.youtube.com/vi/g-99d9Tl3K8/0.jpg)](https://www.youtube.com/watch?v=g-99d9Tl3K8)
+
 
 BabylonJS for rendering. Rapier3D for scene collision and scripting interactions. All entities are physics-based and update the render thread.
 
