@@ -3,7 +3,7 @@ Flowfields, Mazes, with Rapier physics + BablyonJS 3D
 
 [Playable Demo](https://mazeswarm.netlify.app) 
 
-Find the exit, escape the swarm! Use the map to help find the keys and the exit. 
+Find the exit, escape the swarm! Use the map to help find the keys and the exit. We'll be adding more to this later as we have time/energy. I want to develop a much richer game but using the physics and flow puzzle/action premises.
 
 Click to go to youtube:
 [![yt](https://img.youtube.com/vi/g-99d9Tl3K8/0.jpg)](https://www.youtube.com/watch?v=g-99d9Tl3K8)
@@ -11,7 +11,7 @@ Click to go to youtube:
 
 BabylonJS for rendering. Rapier3D for scene collision and scripting interactions. All entities are physics-based and update the render thread.
 
-Physics thread uses a separate thread to convolve the main flowfield that tracks the player from all points in the maze for navigating ai to you. Idle AI will alternate accessible flowfield points on separate convolved layers that can be purposed of other targets too.
+Physics thread uses a separate thread to convolve the main flowfield that tracks the player from all points in the maze for navigating ai to you. Idle AI will alternate accessible flowfield points on separate convolved layers that can be purposed for other targets too.
 
 BabylonJS thread handles only the render updating while positions and states etc. are determined by the physics thread. 
 
