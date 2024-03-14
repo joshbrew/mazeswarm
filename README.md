@@ -29,7 +29,7 @@ then
 
 ### About
 
-Rapier3D: fancy Rust -> JS WASM physics engine, it's faster than anything else free.
+Rapier3D: fancy Rust -> JS WASM physics engine, it's faster than anything else free except maybe the updated Havok plugin for BabylonJS which has first class support. Only thing Babylon needs now is proper lighting :P
 
 Benchmarks: https://www.dimforge.com/blog/2020/08/25/announcing-the-rapier-physics-engine/
 
