@@ -252,6 +252,9 @@ export const babylonRoutes = {
         cameraMode:'topdown'|'firstperson'|'thirdperson'='topdown',
         ctx?:string|WorkerCanvas
     ) {
+
+        //TODO: VIRTUAL CURSOR
+
         //attach user to object and add controls for moving the object around
         if(!ctx || typeof ctx === 'string')
             ctx = this.__graph.run('getCanvas',ctx);
@@ -270,7 +273,7 @@ export const babylonRoutes = {
         let mesh = scene.getMeshById(meshId) as BABYLON.Mesh;
         if(!mesh) return undefined;
 
-        let velocity = new BABYLON.Vector3(0,0,0);
+        let acceleration = new BABYLON.Vector3(0,0,0);
 
         let rotdefault = BABYLON.Quaternion.RotationAxis(BABYLON.Vector3.Up(), 0); //let's align the mesh so it stands vertical
         
@@ -336,6 +339,12 @@ export const babylonRoutes = {
             } 
         }
 
+        //terminal velocity, F = -kv; k = ma/vmax
+        const mass = 100;
+        const accel = 1;
+        let linearDamping = mass * accel / maxSpeed;
+        console.log(linearDamping)
+
         //attach the camera to the mesh
         const camera = ctx.camera as BABYLON.FreeCamera;
         camera.minZ = 0;
@@ -344,8 +353,9 @@ export const babylonRoutes = {
                 position: { x:mesh.position.x, y:mesh.position.y, z:mesh.position.z },
                 rotation:{ x:rotdefault.x, y:rotdefault.y, z:rotdefault.z, w:rotdefault.w},
                 restitution:0.1,
-                mass:100,
+                mass,
                 //friction:0.2,
+                linearDamping,
                 angularDamping:10000 //prevent rotation by the physics engine (player-controlled instead)
             } as PhysicsEntityProps]
         );
@@ -419,24 +429,24 @@ export const babylonRoutes = {
 
         //various controls
         let forward = () => {
-            let v = cameraMode === 'topdown' ? BABYLON.Vector3.Forward() : mesh.getDirection(BABYLON.Vector3.Forward());
-            velocity.normalize().addInPlace(v).normalize().scaleInPlace(maxSpeed);
-            physicsThread.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
+            let relDir = cameraMode === 'topdown' ? BABYLON.Vector3.Forward() : mesh.getDirection(BABYLON.Vector3.Forward());
+            acceleration.normalize().addInPlace(relDir).normalize().scaleInPlace(accel);
+            physicsThread.post('updatePhysicsEntity', [meshId, { acceleration:{ x:acceleration.x, y:0, z:acceleration.z} }])
         };
         let backward = () => {
-            let v = cameraMode === 'topdown' ? BABYLON.Vector3.Backward() : mesh.getDirection(BABYLON.Vector3.Backward());
-            velocity.normalize().addInPlace(v).normalize().scaleInPlace(maxSpeed);
-            physicsThread.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
+            let relDir = cameraMode === 'topdown' ? BABYLON.Vector3.Backward() : mesh.getDirection(BABYLON.Vector3.Backward());
+            acceleration.normalize().addInPlace(relDir).normalize().scaleInPlace(accel);
+            physicsThread.post('updatePhysicsEntity', [meshId, { acceleration:{ x:acceleration.x, y:0, z:acceleration.z} }])
         };
         let left = () => {
-            let v = cameraMode === 'topdown' ? BABYLON.Vector3.Left() : mesh.getDirection(BABYLON.Vector3.Left());
-            velocity.normalize().addInPlace(v).normalize().scaleInPlace(maxSpeed);
-            physicsThread.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
+            let relDir = cameraMode === 'topdown' ? BABYLON.Vector3.Left() : mesh.getDirection(BABYLON.Vector3.Left());
+            acceleration.normalize().addInPlace(relDir).normalize().scaleInPlace(accel);
+            physicsThread.post('updatePhysicsEntity', [meshId, { acceleration:{ x:acceleration.x, y:0, z:acceleration.z} }])
         };
         let right = () => {
-            let v = cameraMode === 'topdown' ? BABYLON.Vector3.Right() : mesh.getDirection(BABYLON.Vector3.Right());
-            velocity.normalize().addInPlace(v).normalize().scaleInPlace(maxSpeed);
-            physicsThread.post('updatePhysicsEntity', [meshId, { velocity:{ x:velocity.x, z:velocity.z} }])
+            let relDir = cameraMode === 'topdown' ? BABYLON.Vector3.Right() : mesh.getDirection(BABYLON.Vector3.Right());
+            acceleration.normalize().addInPlace(relDir).normalize().scaleInPlace(accel);
+            physicsThread.post('updatePhysicsEntity', [meshId, { acceleration:{ x:acceleration.x, y:0, z:acceleration.z} }])
         };
 
         let jumped = false;
@@ -457,8 +467,8 @@ export const babylonRoutes = {
                     if(p.distance <= -boundingBox.vectors[0].y) {
                         let v = BABYLON.Vector3.Up();
                         jumped = true;
-                        velocity.addInPlace(v.scaleInPlace(maxSpeed*0.1));
-                        physicsThread.post('updatePhysicsEntity', [meshId, { velocity:{ y:velocity.y} }]);
+                        acceleration.addInPlace(v.scaleInPlace(maxSpeed*0.1));
+                        physicsThread.post('updatePhysicsEntity', [meshId, { velocity:{ y:acceleration.y} }]);
                         
                         let jumping = () => {
                             let picked = pick();
@@ -477,9 +487,33 @@ export const babylonRoutes = {
         };
 
         let oldMaxSpeed = maxSpeed;
-        let run = () => { maxSpeed = oldMaxSpeed*2; };
-        let walk = () => { maxSpeed = oldMaxSpeed*0.5; };
-        let normalSpeed = () => { maxSpeed = oldMaxSpeed; }
+        let run = () => { 
+            maxSpeed = oldMaxSpeed*2;
+            let linearDamping = mass * accel / maxSpeed;
+            physicsThread.run('updatePhysicsEntity', [
+                meshId, { 
+                    linearDamping,
+                   } as PhysicsEntityProps]
+            );
+         };
+        let walk = () => { 
+            maxSpeed = oldMaxSpeed*0.5;
+            let linearDamping = mass * accel / maxSpeed;
+            physicsThread.run('updatePhysicsEntity', [
+                meshId, { 
+                    linearDamping,
+                   } as PhysicsEntityProps]
+            );
+            ; };
+        let normalSpeed = () => { 
+            maxSpeed = oldMaxSpeed;
+            let linearDamping = mass * accel / maxSpeed;
+            physicsThread.run('updatePhysicsEntity', [
+                meshId, { 
+                    linearDamping,
+                   } as PhysicsEntityProps]
+            );
+         }
 
         //look at point of contact
         let topDownLook = (ev) => {
@@ -516,8 +550,8 @@ export const babylonRoutes = {
 
         let shoot = () => {
             let dirmesh = cameraMode === 'topdown' ? mesh : camera; //for topdown we will use click direction
-            let forward = dirmesh.getDirection(BABYLON.Vector3.Forward()).scaleInPlace(0.15); //put the shot in front of the mesh
-            let impulse = forward.scale(0.003) as any;
+            let forward = dirmesh.getDirection(BABYLON.Vector3.Forward()).scaleInPlace(0.14); //put the shot in front of the mesh
+            let impulse = forward.scale(0.005) as any;
             impulse = {x:impulse.x,y:impulse.y,z:impulse.z};
 
             let settings = {
@@ -539,14 +573,13 @@ export const babylonRoutes = {
                 removed = true;
                 //bullet.receiveShadows = false;
                 const physicsWorker = (this.__graph as WorkerService).workers[(ctx as WorkerCanvas).physicsPort];
-                let pulse = {x:impulse.x*300,y:impulse.y*300,z:impulse.z*300};
+                let pulse = {x:impulse.x*1000,y:impulse.y*1000,z:impulse.z*1000};
                 if(contacting) physicsWorker.post('updatePhysicsEntity', [contacting, { impulse:pulse }]);
                 
                 setTimeout(()=>{
-
                     this.__graph.run('removeEntity', settings._id);
                     scene.onBeforeRenderObservable.remove(bulletObsv);
-                },100)
+                },300)
             }
 
             let bulletObsv = scene.onBeforeRenderObservable.add(() => {
@@ -588,13 +621,13 @@ export const babylonRoutes = {
                 position:{x:0, y:0.25, z:0},
                 diffuseColor:{r:1,g:0,b:1}
             } as Partial<PhysicsEntityProps>,
-            wall3: {
-                collisionType:'cuboid',
-                dimensions:{height:0.5, width:0.1, depth:0.5},
-                navMesh:true,
-                position:{x:0, y:0.25, z:0},
-                diffuseColor:{r:1,g:0,b:1},
-            } as Partial<PhysicsEntityProps>,
+            // wall3: {
+            //     collisionType:'cuboid',
+            //     dimensions:{height:0.5, width:0.1, depth:0.5},
+            //     navMesh:true,
+            //     position:{x:0, y:0.25, z:0},
+            //     diffuseColor:{r:1,g:0,b:1},
+            // } as Partial<PhysicsEntityProps>,
             // platform: {
             //     collisionType:'cuboid',
             //     dimensions:{width:1,height:0.1,depth:1},

@@ -414,15 +414,25 @@ function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigi
         } 
 
         if(settings.collisionGroups) {
-            let mask = makeCollisionGroupFilter(settings.collisionGroups,settings.collisionFilters);
+            
+            let mask = makeCollisionGroupFilter(
+                settings.collisionGroups,
+                settings.collisionFilters
+            );
+            
             collider.setCollisionGroups(mask);
+            
             if(!settings.solverGroups) {
                 collider.setSolverGroups(mask);
             }
         }  
         if (settings.solverGroups) {
             //need to turn the array into a 16 bit mask
-            let mask = makeCollisionGroupFilter(settings.solverGroups,settings.solverFilters);
+            let mask = makeCollisionGroupFilter(
+                settings.solverGroups,
+                settings.solverFilters
+            );
+
             collider.setSolverGroups(mask);
         }
 
@@ -450,42 +460,44 @@ function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigi
     if(settings.impulse) {
         rigidbody.applyImpulse(settings.impulse,false);        
     }
+
     if(settings.force) {
         rigidbody.addForce(settings.force,false);
     }
+
     if(settings.acceleration) {
+
         let mass = rigidbody.mass();
+
+        //F = ma
         rigidbody.applyImpulse(
             {
                 x:settings.acceleration.x*mass,
                 y:settings.acceleration.y*mass,
                 z:settings.acceleration.z*mass
             }, true
-        )
+        );
+        
     }
     if(settings.velocity) {
 
-        let v = rigidbody.linvel();
-
-        if(settings.velocity.x) v.x = settings.velocity.x;
-        if(settings.velocity.y) v.y = settings.velocity.y;
-        if(settings.velocity.z) v.z = settings.velocity.z;
-
         rigidbody.setLinvel(
-            v,
+            new RAPIER.Vector3(
+                settings.velocity.x as number,
+                settings.velocity.y as number,
+                settings.velocity.z as number
+            ),
             true
         );
     }
     if(settings.angVelocity) {
 
-        let v = rigidbody.linvel();
-
-        if(settings.angVelocity.x) v.x = settings.angVelocity.x;
-        if(settings.angVelocity.y) v.y = settings.angVelocity.y;
-        if(settings.angVelocity.z) v.z = settings.angVelocity.z;
-
         rigidbody.setAngvel(
-            v,
+            new RAPIER.Vector3(
+                settings.angVelocity.x as number,
+                settings.angVelocity.y as number,
+                settings.angVelocity.z as number
+            ),
             true
         );
     }
