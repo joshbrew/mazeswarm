@@ -85,7 +85,7 @@ export async function createRenderer(
 
     let timeout;
 
-    //jank mouse capture todo: fix/use real system
+    //jank mouse capture todo: fix/use real virtual cursor with pointer lock and better default preventing
     elm.addEventListener('mouseleave', function() {
         // Request pointer lock
         elm.requestPointerLock =    elm.requestPointerLock ||
@@ -182,7 +182,8 @@ export async function createRenderer(
                 //port Ids
                 physicsPort,
                 //navPort,
-                navPhysicsPort
+                navPhysicsPort,
+                //animating:false
             },
             'receiveBabylonCanvas'
         ) as WorkerCanvasControls;
@@ -212,7 +213,14 @@ export async function createRenderer(
             physicsPort, //navPhysicsPort,
             'updateBabylonEntities'
         ]);
+
+        //update entities then render scene 
         
+        // renderer.post('subscribe',[
+        //     'updateBabylonEntities', //loop triggered by animateWorld and reports to subscribers
+        //     'renderScene'
+        // ]);
+
         physics.post('animateWorld', [true, true]);
 
 
@@ -227,7 +235,7 @@ export async function createRenderer(
                 Math.random(),
                 true,
                 7,
-                300,
+                500,
                 physicsPort,
                 navPhysicsPort,
                 minimapPort,

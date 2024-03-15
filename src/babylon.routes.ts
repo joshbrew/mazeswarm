@@ -54,7 +54,7 @@ export const babylonRoutes = {
 
         const BabylonCanvasProps = {
             BABYLON,
-            init:function (self:WorkerCanvas,canvas,ctx) {
+            init:function (ctx:WorkerCanvas,canvas) {
         
                 if(typeof WorkerGlobalScope !== 'undefined' && globalThis instanceof WorkerGlobalScope) {
                     //this is a hack
@@ -68,18 +68,17 @@ export const babylonRoutes = {
                 //return new Promise((res) => {
                 //    engine.initAsync().then(()=>{
                         const scene = new BABYLON.Scene(engine);
+                        ctx.engine = engine;
+                        ctx.scene = scene;
+                        ctx.camera = this.__graph.run('attachFreeCamera', ctx);
+                        ctx.animations = {};
 
-                        self.engine = engine;
-                        self.scene = scene;
-                        self.camera = this.__graph.run('attachFreeCamera', self);
-                        self.animations = {};
+                        ctx.keys = {}; //for maze key objects
+                        ctx.doors = {}; //for maze door objects
 
-                        self.keys = {}; //for maze key objects
-                        self.doors = {}; //for maze door objects
+                        ctx.playerHP = 10; //10 seconds of contact time
 
-                        self.playerHP = 10; //10 seconds of contact time
-
-                        const cameraControls = this.__graph.run('addCameraControls', 0.5, self); //default camera controls
+                        const cameraControls = this.__graph.run('addCameraControls', 0.5, ctx); //default camera controls
         
                         canvas.addEventListener('resize', () => { 
                             engine.setSize(canvas.clientWidth,canvas.clientHeight); //manual resize
@@ -95,19 +94,19 @@ export const babylonRoutes = {
                         canvas.addEventListener('mousedown', (ev) => {
                             let picked = scene.pick(scene.pointerX, scene.pointerY);
         
-                            if(picked.pickedMesh?.name === 'player' && self.controls?.mode !== 'player') {
+                            if(picked.pickedMesh?.name === 'player' && ctx.controls?.mode !== 'player') {
                                 
                                 this.__graph.run(
                                     'addPlayerControls', 
                                     'player', 
                                     2, 
                                     'topdown', 
-                                    self
+                                    ctx
                                 );
                                 //console.log(picked.pickedMesh);
                             } 
-                            else if(!self.controls) {
-                                this.__graph.run('addCameraControls', 0.5, self);
+                            else if(!ctx.controls) {
+                                this.__graph.run('addCameraControls', 0.5, ctx);
                             }
                                 
                         });
@@ -125,15 +124,15 @@ export const babylonRoutes = {
                         light.shadowEnabled = true;
                         const shadowGenerator = new BABYLON.ShadowGenerator(1024,light);
                         shadowGenerator.usePercentageCloserFiltering = true;
-                        self.shadowGenerator = shadowGenerator;
+                        ctx.shadowGenerator = shadowGenerator;
                         
-                        self.shadowMap = shadowGenerator.getShadowMap();
+                        ctx.shadowMap = shadowGenerator.getShadowMap();
         
                         let entityNames = [] as any;
         
-                        if(self.entities) { //settings passed from main thread as PhysicsEntityProps[]
-                            let meshes = self.entities.map((e,i) => {
-                                let mesh = scene.getNodeById(this.__graph.run('addEntity', e, self, true)); 
+                        if(ctx.entities) { //settings passed from main thread as PhysicsEntityProps[]
+                            let meshes = ctx.entities.map((e,i) => {
+                                let mesh = scene.getNodeById(this.__graph.run('addEntity', e, ctx, true)); 
                                 entityNames[i] = e._id;
                                 return mesh;
                             }) as BABYLON.Mesh[];
@@ -146,17 +145,8 @@ export const babylonRoutes = {
                 
             },
             draw:function (self:WorkerCanvas,canvas,context) {
-                let timestep = performance.now();
-                let frameTimeMs = timestep - self.lastTime || timestep;
-                self.lastTime = timestep;
-                if(self.animations) {
-                    for(const key in self.animations) {
-                        self.animations[key](frameTimeMs, key); //simple support for keyframe tasks
-                    }
-                }
-                self.scene.render();
+                this.__graph.run('renderScene', self);
             },
-
             update:function (self:WorkerCanvas, canvas, context, 
                 data:{[key:string]:{ 
                     position:{x:number,y:number,z:number}, 
@@ -178,6 +168,25 @@ export const babylonRoutes = {
         //let canvasopts = this.graph.CANVASES[renderId] as WorkerCanvas;
 
         return renderId;
+    },
+    renderScene:function (
+        ctx?:string|WorkerCanvas
+    ) {
+        if(!(ctx as WorkerCanvas)?.scene)
+            ctx = this.__graph.run('getCanvas', ctx);
+
+        if(typeof ctx === 'object' && ctx.scene) {
+            let timestep = performance.now();
+            let frameTimeMs = timestep - ctx.lastTime || timestep;
+            ctx.lastTime = timestep;
+            if(ctx.animations) {
+                for(const key in ctx.animations) {
+                    ctx.animations[key](frameTimeMs, key); //simple support for keyframe tasks
+                }
+            }
+            ctx.scene.render();
+        }
+
     },
     initEngine:function ( //run this on the secondary thread
         ctx?:string|WorkerCanvas|{[key:string]:any}
@@ -352,7 +361,7 @@ export const babylonRoutes = {
             meshId, { 
                 position: { x:mesh.position.x, y:mesh.position.y, z:mesh.position.z },
                 rotation:{ x:rotdefault.x, y:rotdefault.y, z:rotdefault.z, w:rotdefault.w},
-                restitution:0.1,
+                restitution:0.01,
                 mass,
                 //friction:0.2,
                 linearDamping,
@@ -427,26 +436,28 @@ export const babylonRoutes = {
             }   
         }
 
+        let multiKey = false;
+
         //various controls
         let forward = () => {
             let relDir = cameraMode === 'topdown' ? BABYLON.Vector3.Forward() : mesh.getDirection(BABYLON.Vector3.Forward());
-            acceleration.normalize().addInPlace(relDir).normalize().scaleInPlace(accel);
-            physicsThread.post('updatePhysicsEntity', [meshId, { acceleration:{ x:acceleration.x, y:0, z:acceleration.z} }])
+            acceleration.normalize().addInPlace(relDir).normalize().scaleInPlace(accel * (multiKey ? 0.5 : 1));
+            physicsThread.post('updatePhysicsEntity', [meshId, { acceleration:{ x:acceleration.x, z:acceleration.z} }])
         };
         let backward = () => {
             let relDir = cameraMode === 'topdown' ? BABYLON.Vector3.Backward() : mesh.getDirection(BABYLON.Vector3.Backward());
-            acceleration.normalize().addInPlace(relDir).normalize().scaleInPlace(accel);
-            physicsThread.post('updatePhysicsEntity', [meshId, { acceleration:{ x:acceleration.x, y:0, z:acceleration.z} }])
+            acceleration.normalize().addInPlace(relDir).normalize().scaleInPlace(accel * (multiKey ? 0.5 : 1));
+            physicsThread.post('updatePhysicsEntity', [meshId, { acceleration:{ x:acceleration.x, z:acceleration.z} }])
         };
         let left = () => {
             let relDir = cameraMode === 'topdown' ? BABYLON.Vector3.Left() : mesh.getDirection(BABYLON.Vector3.Left());
-            acceleration.normalize().addInPlace(relDir).normalize().scaleInPlace(accel);
-            physicsThread.post('updatePhysicsEntity', [meshId, { acceleration:{ x:acceleration.x, y:0, z:acceleration.z} }])
+            acceleration.normalize().addInPlace(relDir).normalize().scaleInPlace(accel * (multiKey ? 0.5 : 1));
+            physicsThread.post('updatePhysicsEntity', [meshId, { acceleration:{ x:acceleration.x, z:acceleration.z} }])
         };
         let right = () => {
             let relDir = cameraMode === 'topdown' ? BABYLON.Vector3.Right() : mesh.getDirection(BABYLON.Vector3.Right());
-            acceleration.normalize().addInPlace(relDir).normalize().scaleInPlace(accel);
-            physicsThread.post('updatePhysicsEntity', [meshId, { acceleration:{ x:acceleration.x, y:0, z:acceleration.z} }])
+            acceleration.normalize().addInPlace(relDir).normalize().scaleInPlace(accel * (multiKey ? 0.5 : 1));
+            physicsThread.post('updatePhysicsEntity', [meshId, { acceleration:{ x:acceleration.x, z:acceleration.z} }])
         };
 
         let jumped = false;
@@ -727,27 +738,29 @@ export const babylonRoutes = {
         //     }
         // }; //activate crowd members in proximity when crossing a ray or sphere cast (i.e. vision)
 
-        let wobserver, aobserver, sobserver, dobserver, ctrlobserver, spaceobserver, shiftobserver;
+        let ctrlobserver, spaceobserver, shiftobserver;
+
+        let moveObservers = {} as any;
 
         //implement above controls with these event listeners
         // TODO: Generalizer this to a keymapping object and just set the functions for the corresponding keys e.g. to allow quick remapping
         let keydownListener = (ev) => {
             let pass;
             if(ev.keyCode === 87 || ev.keycode === 38) { //w or arrow up
-                if(!wobserver) wobserver = scene.onBeforeRenderObservable.add(forward);
-                pass = true;
+                if(!moveObservers.wobserver) moveObservers.wobserver = scene.onBeforeRenderObservable.add(forward);
+                pass = true; if(Object.keys(moveObservers).length > 1) multiKey = true;
             }
             if(ev.keyCode === 65 || ev.keycode === 37) { //a or arrow left
-                if(!aobserver) aobserver = scene.onBeforeRenderObservable.add(left);
-                pass = true;
+                if(!moveObservers.aobserver) moveObservers.aobserver = scene.onBeforeRenderObservable.add(left);
+                pass = true; if(Object.keys(moveObservers).length > 1) multiKey = true;
             }
             if(ev.keyCode === 83 || ev.keycode === 40) { //s or arrow down
-                if(!sobserver) sobserver = scene.onBeforeRenderObservable.add(backward);
-                pass = true;
+                if(!moveObservers.sobserver) moveObservers.sobserver = scene.onBeforeRenderObservable.add(backward);
+                pass = true; if(Object.keys(moveObservers).length > 1) multiKey = true;
             }
             if(ev.keyCode === 68 || ev.keycode === 39) { //d or arrow right
-                if(!dobserver) dobserver = scene.onBeforeRenderObservable.add(right);
-                pass = true;
+                if(!moveObservers.dobserver) moveObservers.dobserver = scene.onBeforeRenderObservable.add(right);
+                pass = true; if(Object.keys(moveObservers).length > 1) multiKey = true;
             }
             if(ev.keyCode === 16) { //shift key
                 if(!shiftobserver) shiftobserver = scene.onBeforeRenderObservable.add(run);
@@ -819,31 +832,36 @@ export const babylonRoutes = {
         
         let keyupListener = (ev) => {
             let pass;
+
+            //w or arrow up
             if(ev.keyCode === 87 || ev.keycode === 38) {
-                if(wobserver) {
-                    scene.onBeforeRenderObservable.remove(wobserver);
-                    wobserver = null;
+                if(moveObservers.wobserver) {
+                    scene.onBeforeRenderObservable.remove(moveObservers.wobserver);
+                    delete moveObservers.wobserver; if(Object.keys(moveObservers).length < 2) multiKey = false;
                 }
                 pass = true;
             }
+            //a or arrow left
             if(ev.keyCode === 65 || ev.keycode === 37) {
-                if(aobserver) {
-                    scene.onBeforeRenderObservable.remove(aobserver);
-                    aobserver = null;
+                if(moveObservers.aobserver) {
+                    scene.onBeforeRenderObservable.remove(moveObservers.aobserver);
+                    delete moveObservers.aobserver; if(Object.keys(moveObservers).length < 2) multiKey = false;
                 }
                 pass = true;
             }
+            //s or arrow down
             if(ev.keyCode === 83 || ev.keycode === 40) {
-                if(sobserver) {
-                    scene.onBeforeRenderObservable.remove(sobserver);
-                    sobserver = null;
+                if(moveObservers.sobserver) {
+                    scene.onBeforeRenderObservable.remove(moveObservers.sobserver);
+                    delete moveObservers.sobserver; if(Object.keys(moveObservers).length < 2) multiKey = false;
                 }
                 pass = true;
             }
+            //d or arrow right
             if(ev.keyCode === 68 || ev.keycode === 39) {
-                if(dobserver) {
-                    scene.onBeforeRenderObservable.remove(dobserver);
-                    dobserver = null;
+                if(moveObservers.dobserver) {
+                    scene.onBeforeRenderObservable.remove(moveObservers.dobserver);
+                    delete moveObservers.dobserver; if(Object.keys(moveObservers).length < 2) multiKey = false;
                 }
                 pass = true;
             }
@@ -1418,9 +1436,6 @@ export const babylonRoutes = {
 
         } 
 
-        
-        
-    
         if(entity) {
 
             if(!settings.instance) {
@@ -1439,6 +1454,10 @@ export const babylonRoutes = {
                         mat.alpha = settings.alpha;
                     }
                 }
+            }
+
+            if(settings.animation) {
+                ctx.animations[settings._id] = settings.animation;
             }
 
             entity.dynamic = settings.dynamic;
@@ -1535,26 +1554,29 @@ export const babylonRoutes = {
 
         const scene = ctx.scene as BABYLON.Scene;
 
+    
         if((data as any)._ids && data.buffer) { //array buffer
-            let idx = 0;
-            let offset = 7;
-            
-            //const entities = ctx.entities as PhysicsEntityProps[];
+            const offset = 7;
 
-            (data as any)._ids.forEach((_id,i) => { //array
-                let mesh = this.__graph.entities[_id] || scene.getNodeByName(_id as string) as PhysicsMesh//scene.getMeshByName(e._id as string) as PhysicsMesh;
-                if(!mesh) return;
-                //if(mesh?.dynamic) {
+            const entities = this.__graph.entities;
+
+            for(let i = 0; i < (data as any)._ids.length; i++) {
+                const _id = (data as any)._ids[i]; 
                 let j = i*offset;
+                
+                let mesh = entities[_id] || scene.getNodeByName(_id as string) as PhysicsMesh//scene.getMeshByName(e._id as string) as PhysicsMesh;
+            
+                if(!mesh) continue;
 
+                if(data.contacts?.[_id]) {
+                    mesh.contacts = data.contacts[_id];
+                } else if(mesh.contacts) delete mesh.contacts; //delete old contacts on this frame
+            
                 mesh.position.set(
                     data.buffer[j],
                     data.buffer[j+1],
                     data.buffer[j+2]
                 );
-                // mesh.position.x = data.buffer[j];
-                // mesh.position.y = data.buffer[j+1];
-                // mesh.position.z = data.buffer[j+2];
 
                 if(mesh.rotationQuaternion) {
                     mesh.rotationQuaternion.set(
@@ -1563,19 +1585,11 @@ export const babylonRoutes = {
                         data.buffer[j+5],
                         data.buffer[j+6]
                     ); 
-                    // mesh.rotationQuaternion._x = data.buffer[j+3];
-                    // mesh.rotationQuaternion._y = data.buffer[j+4];
-                    // mesh.rotationQuaternion._z = data.buffer[j+5];
-                    // mesh.rotationQuaternion._w = data.buffer[j+6];
                 }
 
-                if(data.contacts?.[_id]) {
-                    mesh.contacts = data.contacts[_id];
-                } else if(mesh.contacts) delete mesh.contacts; //delete old contacts on this frame
+            }
 
-                idx++;
-                //}
-            })
+       
         }
         else if(typeof data === 'object') { //key-value pairs
             for(const key in data.buffer) {
@@ -1589,9 +1603,6 @@ export const babylonRoutes = {
                             data.buffer[key].position.y,
                             data.buffer[key].position.z
                         );
-                        // mesh.position.x = data.buffer[key].position.x;
-                        // mesh.position.y = data.buffer[key].position.y;
-                        // mesh.position.z = data.buffer[key].position.z;
                     }
                     if(data.buffer[key].rotation && mesh.rotationQuaternion) {
                         mesh.rotationQuaternion.set(
@@ -1600,10 +1611,6 @@ export const babylonRoutes = {
                             data.buffer[key].rotation.z,
                             data.buffer[key].rotation.w
                         );
-                        // mesh.rotationQuaternion._x = data.buffer[key].rotation.x
-                        // mesh.rotationQuaternion._y = data.buffer[key].rotation.y
-                        // mesh.rotationQuaternion._z = data.buffer[key].rotation.z
-                        // mesh.rotationQuaternion._w = data.buffer[key].rotation.w
                     }
 
                     if(data.contacts?.[key]) {
@@ -1897,7 +1904,7 @@ export const babylonRoutes = {
                 instance.material = tileMaterial;
 
             } else {
-                let color = new BABYLON.Color4(0.2, 0.2, 0.2, 1); // default color (gray)
+                let color = new BABYLON.Color4(0.0, 0.0, 0.2, 1); // default color (gray)
     
                 // Apply the color to the instance
                 (instance as any).color = color; // Set the color directly to the instance
@@ -1956,7 +1963,7 @@ export const babylonRoutes = {
                     for (let wallDirection in cell.walls) {
                         if (cell.walls[wallDirection]) {
                             let wall = createWall(cell, wallDirection);
-                            wallColors.push(1,1,1,1);
+                            wallColors.push(0.3,0,0.3,1);
                         }
                     }
                     if(cell.doors) {

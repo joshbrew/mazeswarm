@@ -472,20 +472,20 @@ function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigi
         //F = ma
         rigidbody.applyImpulse(
             {
-                x:settings.acceleration.x*mass,
-                y:settings.acceleration.y*mass,
-                z:settings.acceleration.z*mass
+                x:(settings.acceleration.x || 0)*mass,
+                y:(settings.acceleration.y || 0)*mass,
+                z:(settings.acceleration.z || 0)*mass
             }, true
         );
-        
+
     }
     if(settings.velocity) {
 
         rigidbody.setLinvel(
             new RAPIER.Vector3(
-                settings.velocity.x as number,
-                settings.velocity.y as number,
-                settings.velocity.z as number
+                settings.velocity.x as number || 0,
+                settings.velocity.y as number || 0,
+                settings.velocity.z as number || 0
             ),
             true
         );
@@ -494,9 +494,9 @@ function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigi
 
         rigidbody.setAngvel(
             new RAPIER.Vector3(
-                settings.angVelocity.x as number,
-                settings.angVelocity.y as number,
-                settings.angVelocity.z as number
+                settings.angVelocity.x as number || 0,
+                settings.angVelocity.y as number || 0,
+                settings.angVelocity.z as number || 0
             ),
             true
         );
@@ -506,9 +506,9 @@ function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigi
 
         let v = rigidbody.linvel();
 
-        if(settings.addVelocity.x) v.x += settings.addVelocity.x;
-        if(settings.addVelocity.y) v.y += settings.addVelocity.y;
-        if(settings.addVelocity.z) v.z += settings.addVelocity.z;
+        if(settings.addVelocity.x) v.x += settings.addVelocity.x || 0;
+        if(settings.addVelocity.y) v.y += settings.addVelocity.y || 0;
+        if(settings.addVelocity.z) v.z += settings.addVelocity.z || 0;
 
         rigidbody.setLinvel(
             v,
@@ -519,9 +519,9 @@ function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigi
 
         let v = rigidbody.linvel();
 
-        if(settings.addAngVelocity.x) v.x += settings.addAngVelocity.x;
-        if(settings.addAngVelocity.y) v.y += settings.addAngVelocity.y;
-        if(settings.addAngVelocity.z) v.z += settings.addAngVelocity.z;
+        if(settings.addAngVelocity.x) v.x += settings.addAngVelocity.x || 0;
+        if(settings.addAngVelocity.y) v.y += settings.addAngVelocity.y || 0;
+        if(settings.addAngVelocity.z) v.z += settings.addAngVelocity.z || 0;
 
         rigidbody.setAngvel(
             v,

@@ -33,7 +33,9 @@ export type PhysicsEntityProps = {
         height:number,  //spritesheet cell height
         width:number //spritesheet cell width
     }
-   
+
+    animation?:(frameTimeMs:number, meshId:string, context:any)=>void,
+
     crowd?:string, //join a crowd for navigation? Need to tell the thread what meshes to merge to create nav meshes. Crowd will update to physics thread with accelerations
     targetOf?:string //is this a target of a crowd?
     navMesh?:boolean //navMesh group to lump the entity into?

@@ -221,7 +221,7 @@ let graph = new WorkerService({
             __onrender:function(elm) {
                 setTimeout(()=>{
                     elm.style.display = 'none';
-                },2000);
+                },4000);
             }
         },
         'minimap':{
