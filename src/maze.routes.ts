@@ -53,12 +53,16 @@ export const mazeRoutes = {
                 collisionType:'capsule',
                 radius:0.1,
                 halfHeight:0.1,
+                ccd:true,
+                diffuseColor:{
+                    r:1,g:0.5,b:0
+                },
                 position:{
                     y:0.4, x:maze.start.x-0.5, 
                     z:maze.start.y-0.5
                 }, //get random start cell position, place within inner 5x5 block of a 7x7 block
                 //instance:true
-            }); //could facilitate multiplayer easily but we don't need that problem rn
+            } as PhysicsEntityProps); //could facilitate multiplayer easily but we don't need that problem rn
 
             //add player controls
             renderThread.post(
@@ -220,7 +224,7 @@ export const mazeRoutes = {
 
         //listen to world updates to send to flowfield
          
-        this.__graph.blorbs = [];
+        this.__graph.blorbs = []; //SWAP TO SOLID PARTICLE SYSTEM
 
         let proms = [] as any[];
         for(let i = 0; i < nEntities; i++) {

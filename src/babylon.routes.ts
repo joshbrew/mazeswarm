@@ -68,6 +68,7 @@ export const babylonRoutes = {
                 //return new Promise((res) => {
                 //    engine.initAsync().then(()=>{
                         const scene = new BABYLON.Scene(engine);
+                        scene.clearColor = new BABYLON.Color4(0,0,0,1);
                         ctx.engine = engine;
                         ctx.scene = scene;
                         ctx.camera = this.__graph.run('attachFreeCamera', ctx);
@@ -572,7 +573,8 @@ export const babylonRoutes = {
                 dynamic:true,
                 radius:0.03,
                 mass:10,
-                impulse
+                impulse,
+                ccd:true
             } as PhysicsEntityProps
 
             this.__graph.run('addEntity', settings);
@@ -1525,6 +1527,36 @@ export const babylonRoutes = {
         }
 
         return settings._id;
+    },
+    createSolidParticleSystem(
+        nParticles:number,
+        model:'sphere'|'tetra'|'cube',
+        positions:Float32Array[],
+        ctx?:WorkerCanvas|string
+    ) {
+
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return;
+
+        if(!this.__graph.particles) this.__graph.particles = {};
+
+        const _id = 'particles'+Object.keys(this.__graph.particles).length;
+
+        let particles = new BABYLON.SolidParticleSystem(
+            'particles'+Object.keys(this.__graph.particles).length,
+            ctx.scene,
+            {
+                updatable:true,
+                isPickable:false,
+                enableDepthSort:true,
+                //enableMultiMaterial:true
+            }
+        );
+
+        this.__graph.particles[_id] = particles;
+
     },
     updateBabylonEntities:function(
         data:{
