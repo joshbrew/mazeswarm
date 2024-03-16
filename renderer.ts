@@ -234,7 +234,7 @@ export async function createRenderer(
                 Math.random(),
                 true,
                 7,
-                500,
+                1000,
                 physicsPort,
                 navPhysicsPort,
                 minimapPort,
