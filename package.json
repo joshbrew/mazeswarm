@@ -26,7 +26,7 @@
     "@types/babylonjs": "^2.4.1",
     "@types/keyboardjs": "~2.5.3",
     "babylonjs": "~6.42.0",
-    "graphscript": "^0.3.5",
+    "graphscript": "^0.3.9",
     "keyboardjs": "~2.7.0",
     "recast-detour": "~1.6.3"
   },
