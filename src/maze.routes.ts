@@ -85,7 +85,7 @@ export const mazeRoutes = {
                     maze,
                     allowDiagonal,
                     avoidance:2,
-                    avoidanceDampen:0.55
+                    avoidanceDampen:0.75
                 })
             })
         }        
@@ -93,7 +93,7 @@ export const mazeRoutes = {
         
         //proxy the flowfields on the navThread for updating
         if(navPhysicsPort) {
-            const costFields = fields.map((f) => f.costField);
+            const costFields = fields.map((f) => new Float32Array(f.costField));
             navThread.post(
                 'mirrorFlowField',
                 [costFields, fields[0].width, fields[0].height, allowDiagonal]
@@ -192,7 +192,8 @@ export const mazeRoutes = {
             //console.log(xy);
             navThread.run("updateFlowField",[i,xy.x,xy.y]).then((field) => {
                 fields[i].costField = field.costField; //we just need the costs to update the physics entities
-                fields[i].flowField = field.flowField;
+                fields[i].flowFieldX = field.flowFieldX;
+                fields[i].flowFieldY = field.flowFieldY;
             });
             cells.push(xy); 
         }
@@ -227,9 +228,12 @@ export const mazeRoutes = {
         this.__graph.blorbs = []; //SWAP TO SOLID PARTICLE SYSTEM
 
         let proms = [] as any[];
+        
+        //let p_r = new Float32Array(nEntities * 7); 
+        //let pSettings = [] as any[];
         for(let i = 0; i < nEntities; i++) {
-            const _id = 'blorb'+i; //todo: generalize
-  
+            const _id = 'blorb_'+i; //todo: generalize
+            const j = i * 7; //p_r offset
             let randomCell = getRandomCell(maze.start,maze.end, (maze.width > 5 && maze.height > 5) ? 3 : 1);
 
             randomCell.x += Math.random()*(3/7) + 2/7; //offset x and y within the 3x3 center of the cells
@@ -237,6 +241,14 @@ export const mazeRoutes = {
  
             //todo not all should get a start field
             let startField = nFields > 1 ? Math.floor(Math.random()*(nFields-1)) || 1 : 0; 
+
+            // p_r[0] = randomCell.x - 1;
+            // p_r[1] = 0.2;
+            // p_r[2] = randomCell.y - 1;
+            
+            // pSettings.push({
+            //     field:Math.random() > 0.5 ? startField : undefined
+            // })
             
             if(physicsPort) {//clear previous
                 if(this.__graph.get(_id)) 
@@ -261,6 +273,20 @@ export const mazeRoutes = {
                 //just apply to physics thread, not necessary rn since we loop thru render thread anyway
             }
         }
+
+        // const pSystemId = await renderThread.run('createSolidParticleSystem',[nEntities,
+        //     { //will call back to this thread to add the physics entity
+        //         _id:'blorb',
+        //         collisionType:'ball',
+        //         dynamic:true,
+        //         radius:0.05,
+        //         mass:10,
+        //         //instance:true,
+        //         //field:Math.random() > 0.5 ? startField : undefined
+        //     },
+        //     p_r,
+        //     pSettings
+        // ]);
 
         await Promise.all(proms); //entity promises (not most efficient)
 
@@ -289,8 +315,9 @@ export const mazeRoutes = {
                 ]
             ).then(
                 (field) => {
-                    fields[0].costField = field.costField; 
-                    fields[0].flowField = field.flowField;
+                    fields[0].costField =  field.costField; 
+                    fields[0].flowFieldX = field.flowFieldX;
+                    fields[0].flowFieldY = field.flowFieldY;
                 }
             );
 
@@ -398,7 +425,7 @@ export const mazeRoutes = {
     },
 
     mirrorFlowField: function(
-        costFields:{[key:string]:any[][]}, 
+        costFields:{[key:string]:Float32Array}, 
         width, 
         height,
         allowDiagonal
@@ -453,8 +480,9 @@ export const mazeRoutes = {
 
         //todo: performance
         return {
-            costField:flowfield.costField, 
-            flowField:flowfield.flowField
+            costField:new Float32Array((flowfield.costField as Float32Array)), 
+            flowFieldX:new Float32Array((flowfield.flowFieldX as Float32Array)), 
+            flowFieldY:new Float32Array((flowfield.flowFieldY as Float32Array))
         }; 
         //return the costField update if we need to update proxy on physics thread from nav thread
     },
@@ -535,9 +563,9 @@ export const mazeRoutes = {
                     }
                 }
   
-                const field = fields[entity.field];
+                const field = fields[entity.field] as FlowField;
 
-                const direction = field.getDirection(fieldX, fieldY);
+                const direction = field.getFlowDirection(fieldX, fieldY);
                 let cost = field.getCost(fieldX, fieldY);
 
                 if (direction && cost !== 0 && cost !== Infinity) {

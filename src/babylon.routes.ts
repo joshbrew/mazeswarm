@@ -353,7 +353,6 @@ export const babylonRoutes = {
         const mass = 100;
         const accel = 1;
         let linearDamping = mass * accel / maxSpeed;
-        console.log(linearDamping)
 
         //attach the camera to the mesh
         const camera = ctx.camera as BABYLON.FreeCamera;
@@ -1331,6 +1330,7 @@ export const babylonRoutes = {
             }
         
             if (!settings._id) settings._id = `${settings.collisionType}${Math.floor(Math.random() * 1000000000000000)}`;
+            
             entity = template.createInstance(settings._id) as PhysicsMesh;
 
             // Apply settings to the instance
@@ -1528,10 +1528,9 @@ export const babylonRoutes = {
 
         return settings._id;
     },
-    createSolidParticleSystem(
-        nParticles:number,
-        model:'sphere'|'tetra'|'cube',
-        positions:Float32Array[],
+    createThinInstances(
+        nInstances,
+        settings,
         ctx?:WorkerCanvas|string
     ) {
 
@@ -1540,22 +1539,110 @@ export const babylonRoutes = {
 
         if(typeof ctx !== 'object') return;
 
-        if(!this.__graph.particles) this.__graph.particles = {};
+        if(!this.__graph.instances) this.__graph.instances = {};
 
-        const _id = 'particles'+Object.keys(this.__graph.particles).length;
+    },
+    createSolidParticleSystem(
+        nParticles:number,
+        settings:PhysicsEntityProps,
+        positionsAndRotations:Float32Array, //x,y,z,rx,ry,rz,rw
+        pSettings:any[],
+        ctx?:WorkerCanvas|string
+    ) {
 
-        let particles = new BABYLON.SolidParticleSystem(
-            'particles'+Object.keys(this.__graph.particles).length,
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return;
+
+        if(!this.__graph.particleSystems) {
+            this.__graph.particleSystems = {};
+            this.__graph.particles = {};
+        }
+
+        const _id = settings._id || 'particles'+Object.keys(this.__graph.particleSystems).length;
+
+        const scene = ctx.scene as BABYLON.Scene;
+        //todo tetras and cubes
+
+        //temp
+        let shape = BABYLON.MeshBuilder.CreateSphere(
+            "ptemplate",{
+                segments:8,
+                diameter:(settings.radius ? settings.radius*2 : 2)
+            }, scene); 
+
+        let pSystem = new BABYLON.SolidParticleSystem(
+            'particles'+Object.keys(this.__graph.particleSystems).length,
             ctx.scene,
             {
                 updatable:true,
                 isPickable:false,
-                enableDepthSort:true,
+                enableDepthSort:true
                 //enableMultiMaterial:true
             }
         );
 
-        this.__graph.particles[_id] = particles;
+
+        pSystem.addShape(shape, nParticles);
+
+        //temp
+        shape.dispose();
+
+        let physics;
+        if(ctx.physicsPort)
+            physics = (this.__graph.workers[ctx.physicsPort] as WorkerInfo)
+
+        pSystem.initParticles = () => {
+            const offset = 7;
+            for(let i = 0; i < pSystem.nbParticles; i++) {
+                const j = i*offset;
+                const pid = `${_id}_${i}`
+                pSystem.particles[i].position.set(
+                    positionsAndRotations[0],
+                    positionsAndRotations[1],
+                    positionsAndRotations[2]
+                );
+                pSystem.particles[i].rotationQuaternion = new BABYLON.Quaternion(
+                    positionsAndRotations[j+3],
+                    positionsAndRotations[j+4],
+                    positionsAndRotations[j+5],
+                    positionsAndRotations[j+6]
+                )
+                this.__graph.entities[pid] = pSystem.particles[i]; //store this on graph
+                this.__graph.particles[pid] = pSystem.particles[i]; //specific reference for solid particle instances
+            
+                if(physics && settings.collisionType) {
+                    settings._id = pid;
+                    settings.position = {
+                        x:positionsAndRotations[0],
+                        y:positionsAndRotations[1],
+                        z:positionsAndRotations[2]
+                    };
+                    settings.rotation = {
+                        x:positionsAndRotations[j+3],
+                        y:positionsAndRotations[j+4],
+                        z:positionsAndRotations[j+5],
+                        w:positionsAndRotations[j+6]
+                    };
+                    physics.post('addPhysicsEntity',[settings]);
+                }
+            }
+        }
+
+        // pSystem.updateParticle = (particle) => {
+        //     return particle;
+        // }
+
+        pSystem.initParticles();
+        pSystem.setParticles();
+
+        // pSystem.refreshVisibleSize()
+        // pSystem.isAlwaysVisible = true; 
+
+        this.__graph.particleSystems[_id] = pSystem;
+
+        return _id;
 
     },
     updateBabylonEntities:function(
@@ -1705,10 +1792,10 @@ export const babylonRoutes = {
             }
         }
 
-        delete ctx.entities[_id];
-        delete ctx.animations[_id]; //if any animations defined for this mesh
 
-        (this.__graph as WorkerService).remove(_id); //remove if not removed already
+        if(this.__graph.get(_id)) 
+            (this.__graph as WorkerService).remove(_id);
+
 
         if(ctx.navPort) {
             const navWorker = this.__graph.workers[ctx.navPort];
@@ -1720,10 +1807,29 @@ export const babylonRoutes = {
             (physicsWorker as WorkerInfo).post('removePhysicsEntity', mesh.id);
         }
         
-        scene.removeMesh(mesh);
+        if(ctx.particles?.[_id]) {
+            //deal with particle systems
+            let split = _id.split('_');
+            let pIdx = parseInt(split.pop() as string);
+            let pSystemId = split.join('_');
+            let pSystem = this.__graph.particleSystems[pSystemId] as BABYLON.SolidParticleSystem;
+            pSystem.removeParticles(pIdx,pIdx);
+        } else if (ctx.particleSystems?.[_id]) {
+            const pSystem = ctx.particleSystems[_id] as BABYLON.SolidParticleSystem;
+            pSystem.removeParticles(0,pSystem.nbParticles);
+        } else if (ctx.instances?.[_id]) {
+            //deal with thin instances
+        }
+        else scene.removeMesh(mesh); //generic mesh object
+
         if(ctx.shadowGenerator) {
             (ctx.shadowGenerator as BABYLON.ShadowGenerator).removeShadowCaster(mesh, true);
         }
+
+        //quick references
+        delete ctx.entities[_id];
+        if(ctx.animations?.[_id]) delete ctx.animations[_id]; //if any animations defined for this mesh
+        if(ctx.particles?.[_id]) delete ctx.particles[_id]; //if the entity is a particle
 
         return _id; //echo id for physics and nav threads to remove to remove by subscribing
     },

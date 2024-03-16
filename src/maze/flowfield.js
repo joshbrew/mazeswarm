@@ -1,25 +1,13 @@
+
+//more efficient implementation
 export class FlowField {
 
-    width;
-    height;
-    allowDiagonal;
-    costField;
-    integrationField;
-    flowField;
-
-    maxValue = Infinity;
-    avoidance=1.5; avoidanceDampen=0.5; avoidObstacles=true;
-    speedModifier=0.3; //e.g. used for tick updates or as a multiplier effect on velocities (your choice)
-
-
-    constructor(
-        options
-    ) {
+    constructor(options) {
         this.init(options);
     }
 
     init(options) {
-        if(options.allowDiagonal) this.allowDiagonal = options.allowDiagonal;
+
         if(options.maze) {
             this.width = options.maze.width*7;
             this.height = options.maze.height*7;
@@ -29,78 +17,88 @@ export class FlowField {
             this.height = options.height;
         }
 
-        if(options.speedModifier) this.speedModifier = options.speedModifier;
-        if(options.avoidObstacles) options.avoidObstacles = true;
-        if(options.maxValue) this.maxValue = options.maxValue;
-        if('avoidance' in options) this.avoidance = options.avoidance;
-        if('avoidanceDampen' in options) this.avoidanceDampen = options.avoidanceDampen;
-        if(options.costRules) this.costField = this.applyCostRules(options.costField, options.costRules);
-        else this.costField = options.costField ? options.costField : options.maze ? this.setMazeTerrain(options.maze) : this.initializeGrid(1);
-        
-        this.integrationField = this.initializeGrid(this.maxValue);
-        this.flowField = this.initializeGrid({ x:0, y:0 });
+        // Basic initialization from options
+        this.allowDiagonal = options.allowDiagonal ?? false;
+        this.avoidObstacles = options.avoidObstacles ?? true;
+        this.speedModifier = options.speedModifier ?? 0.3;
+        this.maxValue = options.maxValue ?? Infinity;
+        this.avoidance = options.avoidance ?? 1.5;
+        this.avoidanceDampen = options.avoidanceDampen ?? 0.5;
+
+
+        // Initialize fields as typed arrays for performance
+        const totalSize = this.width * this.height;
+        this.costField = options.costField ?? new Float32Array(totalSize); // Assuming 1 as default cost
+        this.integrationField = new Float32Array(totalSize).fill(this.maxValue);
+        this.flowFieldX = new Float32Array(totalSize).fill(0); // X component of flow direction
+        this.flowFieldY = new Float32Array(totalSize).fill(0); // Y component of flow direction
+        this.neighborCache = [];
+
+        if(options.maze) {
+            this.setMazeTerrain(options.maze);
+        } else if (options.costRules) {
+            this.applyCostRules(options.costRules);
+        } 
+            
     }
 
-    applyCostRules(costField, costRules) {
-        let result = new Array(costField.length);
-        for (let y = 0; y < costField.length; y++) {
-            result[y] = new Array(costField[y].length);
-            for (let x = 0; x < costField[y].length; x++) {
-                const terrainType = costField[y][x];
+    index(x, y) {
+        return y * this.width + x;
+    }
+
+    setCost(x, y, cost) {
+        this.costField[this.index(x, y)] = cost;
+    }
+
+    getCost(x, y) {
+        return this.costField[this.index(x, y)];
+    }
+
+    // Fills in the missing functionality to match the original class implementation
+    applyCostRules(costRules) {
+        for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+                const idx = this.index(x, y);
+                const terrainType = this.costField[idx]; // Assuming terrainType can be derived from costField
                 if (terrainType in costRules) {
-                    // Apply the numerical cost based on the rule
-                    result[y][x] = costRules[terrainType];
+                    this.costField[idx] = costRules[terrainType];
                 } else {
-                    // If no rule exists for the terrain type, default to impassable
-                    result[y][x] = this.maxValue;
+                    this.costField[idx] = this.maxValue; // Default to impassable if no rule exists
                 }
             }
         }
-
-        return result;
     }
 
-    initializeGrid(defaultValue, width = this.width, height = this.height) {
-        let grid = new Array(height);
-        for (let y = 0; y < height; y++) {
-            if(typeof defaultValue === 'object') {
-                grid[y] = [];
-                for(let x = 0; x < width; x++) {
-                    grid[y][x] = Object.assign({}, defaultValue);
-                }
-            }
-            else grid[y] = new Array(width).fill(defaultValue);
-        }
-        return grid;
-    }
-
-    //2d array
-    setCostField(grid, width, height, allowDiagonal) {
+    //set costfield and reset integration and flowfields
+    setCostField(
+        field, 
+        width, 
+        height, 
+        allowDiagonal
+    ) {
         if(width) this.width = width;
         if(height) this.height = height;
         if(allowDiagonal) this.allowDiagonal = allowDiagonal;
-        this.costField = grid;
-        this.integrationField = this.initializeGrid(this.maxValue);
-        this.flowField = this.initializeGrid({ cost: this.maxValue, direction: null });
+        this.costField = field;
+        this.integrationField = new Float32Array(totalSize).fill(this.maxValue);
+        this.flowFieldX = new Float32Array(totalSize).fill(0); // X component of flow direction
+        this.flowFieldY = new Float32Array(totalSize).fill(0); // Y component of flow direction
+        this.neighborCache = [];
     }
-
+    
     setMazeTerrain = (maze) => {
         // Loop through each MazeCell and update the corresponding 7x7 grid
-        let costField = [];
-        let height = maze.height*7;
-        for(let i = 0; i < height; i++) {
-            costField.push([]);
-        }
         for (let y = 0; y < maze.height; y++) {
             for (let x = 0; x < maze.width; x++) {
-                this.setCostFieldMazeCell(x, y, maze.cells[y][x], costField, maze);
+                this.setCostFieldMazeCell(x, y, maze.cells[y][x], maze);
             }
         }
 
-        return costField;
+        return this.costField;
     }
 
-    setCostFieldMazeCell(x, y, mazeCell, costField, maze) {
+
+    setCostFieldMazeCell(x, y, mazeCell, maze) {
         // Define the 7x7 subgrid for each MazeCell
         const baseX = x * 7;
         const baseY = y * 7;
@@ -110,197 +108,227 @@ export class FlowField {
             for (let j = 0; j < 7; j++) {
                 // The corners and edges are walls if allowDiagonals is true
                 let cost = this.calculateCostForMazePosition(i, j, mazeCell, maze);
-                costField[baseY + j][baseX + i] = cost;
+                this.setCost(baseX + i, baseY + j, cost);
             }
         }
     }
 
     calculateCostForMazePosition(i, j, mazeCell, maze) {
-       // Passable inner 5x5 grid (center)
-        if (i >= 1  && i <= 5 && j >= 1 && j <= 5) {
-            if (this.allowDiagonal) { 
-                if(
-                    (i === 1 && j === 1 && mazeCell.walls.upLeft && mazeCell.walls.up && mazeCell.walls.left) ||
-                    (i === 5 && j === 1 && mazeCell.walls.upRight && mazeCell.walls.up && mazeCell.walls.right) ||
-                    (i === 1 && j === 5 && mazeCell.walls.downLeft && mazeCell.walls.down && mazeCell.walls.left) ||
-                    (i === 5 && j === 5 && mazeCell.walls.downRight && mazeCell.walls.down && mazeCell.walls.right)
-                ) {
-                    return this.maxValue;
-                }
-
-            }
-            return 1;
-        }
-
-        // Handle orthogonal walls: make the 2x3 section for up/down/left/right walls impassable if true
-        // Top wall (3x2)
-        if (!mazeCell.walls.up && (j <= 1) && (i >= 1 && i <= 5)) return 1;
-        // Bottom wall (3x2)
-        if (!mazeCell.walls.down && (j >= 5) && (i >= 1 && i <= 5)) return 1;
-        // Left wall (2x3)
-        if (!mazeCell.walls.left && (i <= 1) && (j >= 1 && j <= 5)) return 1;
-        // Right wall (2x3)
-        if (!mazeCell.walls.right && (i >= 5) && (j >= 1 && j <= 5)) return 1;
-
-    
-        // Diagonal walls when diagonals are allowed
-        if (this.allowDiagonal) {
-            // upLeft correction and additional diagonals
-            // Assuming 'mazeCell.walls.upLeft' being false means the wall is open.
-            if (!mazeCell.walls.upLeft && ((i <= 2 && j <= 2) || (j === 2 && i <= 2) || (i === 2 && j <= 2))) return 1; // Corrected condition for upLeft
-            if (!mazeCell.walls.upRight && ((i >= 4 && j <= 2) || (j === 2 && i >= 4) || (i === 4 && j <= 2))) return 1; // upRight passage
-            if (!mazeCell.walls.downLeft && ((i <= 2 && j >= 4) || (j === 4 && i <= 2) || (i === 2 && j >= 4))) return 1; // downLeft passage
-            if (!mazeCell.walls.downRight && ((i >= 4 && j >= 4) || (j === 4 && i >= 4) || (i === 4 && j >= 4))) return 1; // downRight passage
-        
-            if( i === 0 && j === 0 && (maze.getNeighbor(mazeCell,'left')?.walls.upRight === false || maze.getNeighbor(mazeCell,'up')?.walls.downLeft === false)) return 1;
-            if( i === 0 && j === 6 && (maze.getNeighbor(mazeCell,'left')?.walls.downRight === false || maze.getNeighbor(mazeCell,'down')?.walls.upLeft === false)) return 1;
-            if( i === 6 && j === 0 && (maze.getNeighbor(mazeCell,'right')?.walls.upLeft === false || maze.getNeighbor(mazeCell,'up')?.walls.downRight === false)) return 1;
-            if( i === 6 && j === 6 && (maze.getNeighbor(mazeCell,'right')?.walls.downLeft === false || maze.getNeighbor(mazeCell,'down')?.walls.upRight === false)) return 1;
-
-        }
-    
-        // All other cells are passable
-        return this.maxValue;
+        // Passable inner 5x5 grid (center)
+         if (i >= 1  && i <= 5 && j >= 1 && j <= 5) {
+             if (this.allowDiagonal) { 
+                 if(
+                     (i === 1 && j === 1 && mazeCell.walls.upLeft && mazeCell.walls.up && mazeCell.walls.left) ||
+                     (i === 5 && j === 1 && mazeCell.walls.upRight && mazeCell.walls.up && mazeCell.walls.right) ||
+                     (i === 1 && j === 5 && mazeCell.walls.downLeft && mazeCell.walls.down && mazeCell.walls.left) ||
+                     (i === 5 && j === 5 && mazeCell.walls.downRight && mazeCell.walls.down && mazeCell.walls.right)
+                 ) {
+                     return this.maxValue;
+                 }
+ 
+             }
+             return 1;
+         }
+ 
+         // Handle orthogonal walls: make the 2x3 section for up/down/left/right walls impassable if true
+         // Top wall (3x2)
+         if (!mazeCell.walls.up && (j <= 1) && (i >= 1 && i <= 5)) return 1;
+         // Bottom wall (3x2)
+         if (!mazeCell.walls.down && (j >= 5) && (i >= 1 && i <= 5)) return 1;
+         // Left wall (2x3)
+         if (!mazeCell.walls.left && (i <= 1) && (j >= 1 && j <= 5)) return 1;
+         // Right wall (2x3)
+         if (!mazeCell.walls.right && (i >= 5) && (j >= 1 && j <= 5)) return 1;
+ 
+     
+         // Diagonal walls when diagonals are allowed
+         if (this.allowDiagonal) {
+             // upLeft correction and additional diagonals
+             // Assuming 'mazeCell.walls.upLeft' being false means the wall is open.
+             if (!mazeCell.walls.upLeft && ((i <= 2 && j <= 2) || (j === 2 && i <= 2) || (i === 2 && j <= 2))) return 1; // Corrected condition for upLeft
+             if (!mazeCell.walls.upRight && ((i >= 4 && j <= 2) || (j === 2 && i >= 4) || (i === 4 && j <= 2))) return 1; // upRight passage
+             if (!mazeCell.walls.downLeft && ((i <= 2 && j >= 4) || (j === 4 && i <= 2) || (i === 2 && j >= 4))) return 1; // downLeft passage
+             if (!mazeCell.walls.downRight && ((i >= 4 && j >= 4) || (j === 4 && i >= 4) || (i === 4 && j >= 4))) return 1; // downRight passage
+         
+             if( i === 0 && j === 0 && (maze.getNeighbor(mazeCell,'left')?.walls.upRight === false || maze.getNeighbor(mazeCell,'up')?.walls.downLeft === false)) return 1;
+             if( i === 0 && j === 6 && (maze.getNeighbor(mazeCell,'left')?.walls.downRight === false || maze.getNeighbor(mazeCell,'down')?.walls.upLeft === false)) return 1;
+             if( i === 6 && j === 0 && (maze.getNeighbor(mazeCell,'right')?.walls.upLeft === false || maze.getNeighbor(mazeCell,'up')?.walls.downRight === false)) return 1;
+             if( i === 6 && j === 6 && (maze.getNeighbor(mazeCell,'right')?.walls.downLeft === false || maze.getNeighbor(mazeCell,'down')?.walls.upRight === false)) return 1;
+ 
+         }
+     
+         // All other cells are passable
+         return this.maxValue;
     }
 
-    updateField(goalX, goalY) { 
-        // Validate goal coordinates
-        if (goalX < 0 || goalX >= this.width || goalY < 0 || goalY >= this.height) {
-            console.error('Goal coordinates are out of bounds');
-            return;
-        }
-
-        if (this.costField[goalY][goalX] === this.maxValue) {
-            console.error('Goal is on an impassable terrain');
-        }
-
-        // Reset fields before recalculating
-        this.integrationField = this.initializeGrid(this.maxValue);
-        this.flowField = this.initializeGrid({ x:0, y:0 });
-
-        this.calculateIntegrationField(goalX, goalY);
-        
-        this.calculateFlowField();
-
-        this.convolveFlowField(); 
+    setFlowDirection(x, y, dx, dy) {
+        const idx = this.index(x, y);
+        this.flowFieldX[idx] = dx;
+        this.flowFieldY[idx] = dy;
     }
 
-    calculateIntegrationField(goalX, goalY) {
-        let queue = [{x: goalX, y: goalY, cost: 0}];
-        const iF = this.integrationField;
-        iF[goalY][goalX] = 0;
-    
-        while (queue.length > 0) {
-            let {x, y, cost} = queue.shift();
-    
-            this.getNeighbors(x, y).forEach(({nx, ny}) => {
-                let newCost = cost + this.costField[ny][nx];
-                if (newCost < iF[ny][nx]) {
-                    iF[ny][nx] = newCost;
-                    queue.push({x: nx, y: ny, cost: newCost});
-                }
-            });
-        }
-    }
-
-    calculateFlowField() {
-        const {width, height, costField, maxValue, integrationField, flowField, avoidObstacles, avoidance, avoidanceDampen} = this;
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                if (costField[y][x] !== maxValue) {
-                    let lowestCost = maxValue;
-                    let direction = null;
-                    let hasImpassableNeighbor = false;
-                    let impassableNeighborDirection = { x: 0, y: 0 };
-    
-                    this.getNeighbors(x, y).forEach(({nx, ny}) => {
-                        let neighborCost = integrationField[ny][nx];
-                        if (neighborCost < lowestCost) {
-                            lowestCost = neighborCost;
-                            direction = {x: nx - x, y: ny - y};
-                        }
-                        if (costField[ny][nx] === maxValue) {
-                            hasImpassableNeighbor = true;
-                            impassableNeighborDirection.x += nx - x;
-                            impassableNeighborDirection.y += ny - y;
-                        }
-                    });
-    
-                    if (direction && hasImpassableNeighbor && avoidObstacles) {
-                        direction = this.adjustDirectionAwayFromImpassable(direction, impassableNeighborDirection, avoidance, avoidanceDampen);
-                    }
-    
-                    flowField[y][x] = direction;
-                }
-            }
-        }
-        this.convolveFlowField();
-    }
-        
-    //add some avoidance from walls so they are less likely to get stuck on corners etc
-    adjustDirectionAwayFromImpassable(direction, impassableNeighborDirection, multiplier=1.5, dampen=0.5) {
-        // Calculate a new direction that points away from the impassable neighbor
-        let adjustedDirection = {
-            x: direction.x*dampen-(impassableNeighborDirection.x),
-            y: direction.y*dampen-(impassableNeighborDirection.y)
-        };
-        
-        // Normalize the adjusted direction
-        let magnitude = Math.sqrt(adjustedDirection.x * adjustedDirection.x + adjustedDirection.y * adjustedDirection.y);
-        if (magnitude > 0) {
-            adjustedDirection.x /= magnitude;
-            adjustedDirection.y /= magnitude;
-
-            adjustedDirection.x *= multiplier;
-            adjustedDirection.y *= multiplier;
-        }
-
-        return adjustedDirection;
+    getFlowDirection(x, y) {
+        const idx = this.index(x, y);
+        return { x: this.flowFieldX[idx], y: this.flowFieldY[idx] };
     }
 
     isWithinBounds(x, y) {
         return x >= 0 && x < this.width && y >= 0 && y < this.height;
     }
 
-    convolveFlowField() {
-        // Define the kernel and its center offset for direct access
-        let kernel = [0.05, 0.1, 0.05, 0.1, 0.4, 0.1, 0.05, 0.1, 0.05];
-        let offsets = [-1, 0, 1];
-    
-        // Pre-calculate the width and height to avoid repeated access
-        const {width, height} = this;
-    
-        // Initialize new flow field to avoid modifying the original during calculation
-        let newFlowField = this.initializeGrid({x: 0, y: 0}, width, height);
-    
-        // Iterate over each cell excluding the border to apply the convolution
-        for (let y = 1; y < height - 1; y++) {
-            for (let x = 1; x < width - 1; x++) {
-                let sumX = 0, sumY = 0;
-    
-                // Apply kernel to each neighbor
-                for (let i = 0; i < offsets.length; i++) {
-                    for (let j = 0; j < offsets.length; j++) {
-                        const offsetY = offsets[i], offsetX = offsets[j];
-                        const weight = kernel[(offsetY + 1) * 3 + (offsetX + 1)];
-                        const neighbor = this.flowField[y + offsetY][x + offsetX];
-    
-                        sumX += neighbor.x * weight;
-                        sumY += neighbor.y * weight;
-                    }
+    getNeighbors(x, y) {
+        const idx = this.index(x, y);
+        // Check if the neighbors for this cell are already calculated
+        let neighbors = this.neighborCache[idx];
+        if (!neighbors) {
+            // If not, calculate and store them
+            const indices = [];
+            const directions = this.allowDiagonal ? this.directionsOct : this.directions;
+            directions.forEach(({ dx, dy }) => {
+                const nx = x + dx, ny = y + dy;
+                if (this.isWithinBounds(nx, ny)) {
+                    indices.push(this.index(nx, ny));
                 }
-    
-                // Assign the convolved value directly
-                newFlowField[y][x] = {x: sumX, y: sumY};
-            }
+            });
+            this.neighborCache[idx] = indices;
+            neighbors = indices;
         }
-    
-        //note either use padding or copy edges from prev flowfield
-
-        // Update the flow field
-        this.flowField = newFlowField;
+        // Return the cached neighbors
+        return neighbors;
     }
 
+    updateField(goalX, goalY) {
+        //console.time('flowfield');
+        // Reset fields before recalculating
+        this.integrationField.fill(this.maxValue);
+        this.flowFieldX.fill(0);
+        this.flowFieldY.fill(0);
+
+        // Validate goal coordinates and update fields
+        if (!this.isWithinBounds(goalX, goalY)) {
+            console.error('Goal coordinates are out of bounds');
+            return;
+        }
+
+        this.calculateIntegrationField(goalX, goalY);
+        this.calculateFlowField();
+        this.convolveFlowField(); // Optional: if you need to smooth the directions
+    
+        //console.timeEnd('flowfield');
+    }
+
+    idxToXY(idx) {
+        return [idx % this.width, Math.floor(idx / this.width)];
+    }
+
+    calculateIntegrationField(goalX, goalY) {
+        this.integrationField.fill(this.maxValue);
+        const goalIdx = this.index(Math.floor(goalX), Math.floor(goalY));
+        this.integrationField[goalIdx] = 0;
+        let queue = [goalIdx];
+    
+        while (queue.length > 0) {
+            let currentIdx = queue.shift();
+            let currentCost = this.integrationField[currentIdx];
+            let x = currentIdx % this.width
+            let y = Math.floor(currentIdx / this.width);
+    
+            this.getNeighbors(x, y).forEach(nIdx => {
+                let newCost = currentCost + this.costField[nIdx];
+                if (newCost < this.integrationField[nIdx]) {
+                    this.integrationField[nIdx] = newCost;
+                    queue.push(nIdx);
+                }
+            });
+        }
+    }
+
+    calculateFlowField() {
+        for (let idx = 0; idx < this.integrationField.length; idx++) {
+            //if (this.costField[idx] === this.maxValue) continue; // Skip impassable cells
+    
+            //idxToXY
+            let x = idx % this.width;
+            let y = Math.floor(idx / this.width);
+
+            let lowestCost = this.maxValue;
+            let bestDx = 0, bestDy = 0;
+            let impassableDx = 0, impassableDy = 0;
+            let hasImpassableNeighbor = false;
+    
+            this.getNeighbors(x, y).forEach(nIdx => {
+                
+                //idxToXY
+                let nx = nIdx % this.width;
+                let ny = Math.floor(nIdx / this.width);
+
+                let neighborCost = this.integrationField[nIdx];
+                let isImpassable = this.costField[nIdx] === this.maxValue;
+    
+                if (neighborCost < lowestCost) {
+                    lowestCost = neighborCost;
+                    bestDx = nx - x;
+                    bestDy = ny - y;
+                }
+    
+                if (isImpassable) {
+                    hasImpassableNeighbor = true;
+                    impassableDx += nx - x;
+                    impassableDy += ny - y;
+                }
+            });
+    
+            //adjustDirectionAwayFromImpassable
+            if (hasImpassableNeighbor && this.avoidObstacles && (impassableDx !== 0 || impassableDy !== 0)) {
+                let adjustedDx = bestDx * this.avoidanceDampen - impassableDx;
+                let adjustedDy = bestDy * this.avoidanceDampen - impassableDy;
+            
+                let magnitude = Math.sqrt(adjustedDx * adjustedDx + adjustedDy * adjustedDy);
+                if (magnitude > 0) {
+                    bestDx = (adjustedDx / magnitude) * this.avoidance;
+                    bestDy = (adjustedDy / magnitude) * this.avoidance;
+                }
+            }
+    
+            this.flowFieldX[idx] = bestDx;
+            this.flowFieldY[idx] = bestDy;
+        }
+    }
+
+    adjustDirectionAwayFromImpassable(dx, dy, impassableDx, impassableDy) {
+        let adjustedDx = dx * this.avoidanceDampen - impassableDx;
+        let adjustedDy = dy * this.avoidanceDampen - impassableDy;
+    
+        let magnitude = Math.sqrt(adjustedDx * adjustedDx + adjustedDy * adjustedDy);
+        if (magnitude > 0) {
+            adjustedDx = (adjustedDx / magnitude) * this.avoidance;
+            adjustedDy = (adjustedDy / magnitude) * this.avoidance;
+        }
+    
+        return [adjustedDx, adjustedDy];
+    }
+
+    convolveFlowField() {
+        // Convolution to smooth out the flow field directions
+        // This example does not perform actual convolution but demonstrates the approach
+
+        let newFlowFieldX = new Float32Array(this.width * this.height);
+        let newFlowFieldY = new Float32Array(this.width * this.height);
+
+        // Simple averaging for smoothing, replace with actual convolution as needed
+        for (let y = 1; y < this.height - 1; y++) {
+            for (let x = 1; x < this.width - 1; x++) {
+                let idx = this.index(x, y);
+                newFlowFieldX[idx] = (this.flowFieldX[idx] + this.flowFieldX[this.index(x + 1, y)] + this.flowFieldX[this.index(x - 1, y)]) / 3;
+                newFlowFieldY[idx] = (this.flowFieldY[idx] + this.flowFieldY[this.index(x, y + 1)] + this.flowFieldY[this.index(x, y - 1)]) / 3;
+            }
+        }
+
+        this.flowFieldX = newFlowFieldX;
+        this.flowFieldY = newFlowFieldY;
+    }
+
+      // Helper static properties for directions
     directions = [
         {dx: -1, dy: 0}, {dx: 1, dy: 0},
         {dx: 0, dy: -1}, {dx: 0, dy: 1}
@@ -312,45 +340,6 @@ export class FlowField {
         {dx: -1, dy: 1}, {dx: 1, dy: 1}
     ]
 
-    getNeighbors(x, y) {
-        const neighbors = [];
-
-        const directions = this.allowDiagonal ? this.directionsOct : this.directions;
-
-        directions.forEach(({dx, dy}) => {
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx >= 0 && ny >= 0 && nx < this.width && ny < this.height) {
-                neighbors.push({nx, ny});
-            }
-        });
-
-        return neighbors;
-    }
-
-    getDirection(x, y) {
-        if (x >= 0 && x < this.width && y >= 0 && y < this.height) {
-            return this.flowField[y]?.[x];
-        }
-        else return null;
-    }
-
-    // Method to get the cost at a specific grid cell
-    getCost(x, y) {
-        if (x >= 0 && x < this.width && y >= 0 && y < this.height) {
-            return this.costField[y][x];
-        }
-        return this.maxValue; // Return Infinity if the coordinates are outside the grid or for impassable terrain
-    }
-
-
-
-
-
-
-
-
-    //quick visualization code, everything after this is not relevant to the implementation
 
     toggleVisualizationMode() {
         const modes = ['costField', 'integrationField', 'flowField'];
@@ -416,7 +405,7 @@ export class FlowField {
     }
 
     drawCostFieldCell = (ctx, x, y, cellSize) => {
-        const cost = this.costField[y][x];
+        const cost = this.getCost(x,y);
         ctx.fillStyle = this.getCostFieldColor(cost);
         ctx.fillRect(x * cellSize, y * cellSize, cellSize, cellSize);
         ctx.strokeRect(x * cellSize, y * cellSize, cellSize, cellSize); // Optional: Draw cell border
@@ -431,8 +420,8 @@ export class FlowField {
     }
 
     drawFlowFieldCell = (ctx, x, y, cellSize) => {
-        const cost = this.costField[y][x];
-        const direction = this.flowField[y][x];
+        const cost = this.getCost(x,y);
+        const direction = this.getFlowDirection(x,y);
     
         // Set cell color based on cost
         ctx.fillStyle = this.getCostFieldColor(cost);
@@ -554,6 +543,8 @@ export class FlowField {
 }
 
 
+
+
 class Dot {
     constructor(x, y, speed = 0.3, mass = 1, maxValue=Infinity) {
         this.x = x;
@@ -571,6 +562,10 @@ class Dot {
     setGoal(goalX, goalY) {
         this.goalX = goalX;
         this.goalY = goalY;
+    }
+
+    index(x, y, width) {
+        return y * width + x;
     }
 
     // New method to check if the dot should settle
@@ -607,7 +602,7 @@ class Dot {
         const cellY = Math.floor(this.y);
 
         // Handle elastic collision with impassable walls
-        if (costField[cellY][cellX] === this.maxValue) {
+        if (costField[this.index(cellX,cellY,fieldWidth)] === this.maxValue) {
             this.handleElasticCollisionWithWall();
         }
     }
@@ -630,7 +625,7 @@ class Dot {
                     const newX = Math.floor(this.x) + dx;
                     const newY = Math.floor(this.y) + dy;
                     if (newX >= 0 && newY >= 0 && newX < fieldWidth && newY < fieldHeight) {
-                        if (costField[newY][newX] !== this.maxValue) {
+                        if (costField[this.index(newX,newY,fieldWidth)] !== this.maxValue) {
                             //console.log('teleporting')
                             this.x = newX;
                             this.y = newY;
@@ -646,7 +641,7 @@ class Dot {
         if (!this.isSettled) {
             const cellX = Math.floor(this.x);
             const cellY = Math.floor(this.y);
-            const direction = flowField.getDirection(cellX, cellY);
+            const direction = flowField.getFlowDirection(cellX, cellY);
             const cost = flowField.getCost(cellX, cellY);
 
             if (direction && cost !== this.maxValue) {

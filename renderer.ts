@@ -40,10 +40,9 @@ export async function createRenderer(
     //console.log(graph, elm);
     const renderer = graph.addWorker({url:renderworker}) as WorkerInfo;
 
-    
     const physics = graph.addWorker({url:physicsworker}) as WorkerInfo;
     const navigation = graph.addWorker({url:physicsworker}) as WorkerInfo;
-    const minimap = graph.addWorker({url:physicsworker});
+    const minimap = graph.addWorker({url:physicsworker}) as WorkerInfo;
 
     //the physics thread will update the positions of the entities
     // alternatively user inputs can update the positions/forces on the physics thread
