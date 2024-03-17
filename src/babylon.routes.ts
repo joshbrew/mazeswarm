@@ -528,15 +528,28 @@ export const babylonRoutes = {
 
         //look at point of contact
         let topDownLook = (ev) => {
-            let pickResult = scene.pick(ev.clientX, ev.clientY);
+            // let pickResult = scene.pick(ev.clientX, ev.clientY); //expensive!!!
 
-            if(pickResult.pickedPoint) {
-                var diffX = pickResult.pickedPoint.x - mesh.position.x;
-                var diffY = pickResult.pickedPoint.z - mesh.position.z;
-                let theta = Math.atan2(diffX,diffY);
-                let rot = BABYLON.Quaternion.RotationAxis(BABYLON.Vector3.Up(), theta);
-                physicsThread.post('updatePhysicsEntity', [meshId, { rotation:{ x:rot.x, y:rot.y, z:rot.z, w:rot.w} }])
-            }
+            // if(pickResult.pickedPoint) {
+            //     var diffX = pickResult.pickedPoint.x - mesh.position.x;
+            //     var diffY = pickResult.pickedPoint.z - mesh.position.z;
+            //     let theta = Math.atan2(diffX,diffY);
+            //     let rot = BABYLON.Quaternion.RotationAxis(BABYLON.Vector3.Up(), theta);
+            
+            // Get canvas center
+            let centerX = (ctx as WorkerCanvas).canvas.width / 2;
+            let centerY = (ctx as WorkerCanvas).canvas.height / 2;
+
+            // Calculate difference between event position and canvas center
+            let diffX = ev.clientX - centerX;
+            let diffY = ev.clientY - centerY;
+
+            // Calculate angle from canvas center to event position
+            let theta = Math.atan2(diffX, -diffY); // Y is inverted in screen coordinates
+            let rot = BABYLON.Quaternion.RotationAxis(BABYLON.Vector3.Up(), theta);
+            
+            physicsThread.post('updatePhysicsEntity', [meshId, { rotation:{ x:rot.x, y:rot.y, z:rot.z, w:rot.w} }])
+            //}
         };
         //let firstPersonLook //look at camera controller
 
