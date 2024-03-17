@@ -1308,6 +1308,7 @@ export const babylonRoutes = {
                         const sphereMat = new BABYLON.StandardMaterial('spheremat', scene);
                         template.material = sphereMat;
                         sphereMat.diffuseColor = new BABYLON.Color3(1,1,0);
+                        sphereMat.freeze();
                         break;
                     case 'capsule':
                         template = BABYLON.MeshBuilder.CreateCapsule(settings.collisionType+'TEMPLATE', {
@@ -1914,6 +1915,7 @@ export const babylonRoutes = {
 
         let wallMaterial = new BABYLON.StandardMaterial("wallMaterial", scene);
         //wallMaterial.disableLighting = true;
+        wallMaterial.freeze();
 
         (wallMaterial as any).shadowEnabled = true;
 
@@ -2079,7 +2081,8 @@ export const babylonRoutes = {
                 } 
                 tileMaterial.diffuseColor = color;
 
-                instance.material = tileMaterial;
+                instance.material = tileMaterial
+                tileMaterial.freeze();
 
             } else {
                 let color = new BABYLON.Color4(0.0, 0.0, 0.2, 1); // default color (gray)
@@ -2228,6 +2231,9 @@ export const babylonRoutes = {
             var buffer2 = new BABYLON.VertexBuffer(ctx.engine, wallColorData, BABYLON.VertexBuffer.ColorKind, false, false, 4, true);
             wallTemplate.setVerticesBuffer(buffer2);
             wallTemplate.material = wallMaterial;
+
+            wallTemplate.freezeWorldMatrix();
+            floorTileTemplate.freezeWorldMatrix();
         }
 
 
