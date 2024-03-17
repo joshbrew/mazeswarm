@@ -785,7 +785,7 @@ export const babylonRoutes = {
                 pass = true;
             }
             if(ev.keyCode === 32) { //space key
-                if(!spaceobserver) spaceobserver = scene.onBeforeRenderObservable.add(jump);
+                //if(!spaceobserver) spaceobserver = scene.onBeforeRenderObservable.add(jump);
                 pass = true;
             }
 

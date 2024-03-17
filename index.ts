@@ -282,7 +282,7 @@ let graph = new WorkerService({
                 MazeSwarm Controls:<br><br>
                 WASD or Arrows: Move Free Camera<br/>
                 Shift: Sprint (double speed)<br/>
-                Space: Up<br/>
+                <!--  Space: Up<br/> -->
                 Ctrl: Down<br/>
                 Mouse Click: Shoot<br/>
                 Z: Change camera view<br/>
