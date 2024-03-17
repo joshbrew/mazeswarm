@@ -227,12 +227,12 @@ export const mazeRoutes = {
          
         this.__graph.blorbs = []; //SWAP TO SOLID PARTICLE SYSTEM
 
-        let proms = [] as any[];
+        let prom;
         
         //let p_r = new Float32Array(nEntities * 7); 
         //let pSettings = [] as any[];
         for(let i = 0; i < nEntities; i++) {
-            const _id = 'blorb_'+i; //todo: generalize
+            let _id = 'blorb_'+i;
             const j = i * 7; //p_r offset
             let randomCell = getRandomCell(maze.start,maze.end, (maze.width > 5 && maze.height > 5) ? 3 : 1);
 
@@ -242,9 +242,9 @@ export const mazeRoutes = {
             //todo not all should get a start field
             let startField = nFields > 1 ? Math.floor(Math.random()*(nFields-1)) || 1 : 0; 
 
-            // p_r[0] = randomCell.x - 1;
-            // p_r[1] = 0.2;
-            // p_r[2] = randomCell.y - 1;
+            // p_r[j] = randomCell.x - 1; //x
+            // p_r[j+1] = 0.2;              //y
+            // p_r[j+2] = randomCell.y - 1; //z
             
             // pSettings.push({
             //     field:Math.random() > 0.5 ? startField : undefined
@@ -254,7 +254,7 @@ export const mazeRoutes = {
                 if(this.__graph.get(_id)) 
                     renderThread.post('removeEntity', _id); //remove any previous
     
-                const prom = renderThread.run('addEntity',{ //will call back to this thread to add the physics entity
+                const entitySettings = { //will call back to this thread to add the physics entity
                     _id,
                     dynamic:true,
                     collisionType:'ball',
@@ -263,18 +263,21 @@ export const mazeRoutes = {
                     position:{y:0.2, x:randomCell.x - 1, z:randomCell.y - 1}, //get random start cell position, place within inner 5x5 block of a 7x7 block
                     instance:true,
                     field:Math.random() > 0.5 ? startField : undefined
-                }).then(()=>{                
-                    this.__graph.blorbs.push(this.__graph.get(_id));
-                });
+                }
+            
+                if(i === nEntities - 1)
+                    prom = renderThread.run('addEntity',entitySettings);
+                else
+                    renderThread.post('addEntity',entitySettings)
 
-                proms.push(prom); 
 
             } else {
                 //just apply to physics thread, not necessary rn since we loop thru render thread anyway
             }
         }
 
-        // const pSystemId = await renderThread.run('createSolidParticleSystem',[nEntities,
+        // await renderThread.run('createSolidParticleSystem',[
+        //     nEntities,
         //     { //will call back to this thread to add the physics entity
         //         _id:'blorb',
         //         collisionType:'ball',
@@ -288,7 +291,15 @@ export const mazeRoutes = {
         //     pSettings
         // ]);
 
-        await Promise.all(proms); //entity promises (not most efficient)
+        let r = await prom;
+        console.log(r);
+        
+        for(let i = 0; i < nEntities; i++) {
+            const _id = 'blorb_'+i; //todo: generalize
+            this.__graph.blorbs.push(this.__graph.get(_id));
+        }
+
+        //await Promise.all(proms); //entity promises (not most efficient)
 
 
         let animation; 

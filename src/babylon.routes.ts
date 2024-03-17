@@ -1541,7 +1541,7 @@ export const babylonRoutes = {
 
         return settings._id;
     },
-    createThinInstances(
+    createThinInstances: function(
         nInstances,
         settings,
         ctx?:WorkerCanvas|string
@@ -1555,11 +1555,12 @@ export const babylonRoutes = {
         if(!this.__graph.instances) this.__graph.instances = {};
 
     },
-    createSolidParticleSystem(
+    createSolidParticleSystem: async function(
         nParticles:number,
         settings:PhysicsEntityProps,
         positionsAndRotations:Float32Array, //x,y,z,rx,ry,rz,rw
-        pSettings:any[],
+        pSettings?:any[],
+        animated=true,
         ctx?:WorkerCanvas|string
     ) {
 
@@ -1585,6 +1586,7 @@ export const babylonRoutes = {
                 diameter:(settings.radius ? settings.radius*2 : 2)
             }, scene); 
 
+
         let pSystem = new BABYLON.SolidParticleSystem(
             'particles'+Object.keys(this.__graph.particleSystems).length,
             ctx.scene,
@@ -1602,9 +1604,20 @@ export const babylonRoutes = {
         //temp
         shape.dispose();
 
+        const mesh = pSystem.buildMesh();
+
+        let material = new BABYLON.StandardMaterial('ptemplatemat', scene);
+
+        material.diffuseColor = new BABYLON.Color3(1,1,0);
+
+        mesh.material = material;
+        //pSystem.rebuildMesh();
+
         let physics;
         if(ctx.physicsPort)
             physics = (this.__graph.workers[ctx.physicsPort] as WorkerInfo)
+
+        let p;
 
         pSystem.initParticles = () => {
             const offset = 7;
@@ -1612,9 +1625,9 @@ export const babylonRoutes = {
                 const j = i*offset;
                 const pid = `${_id}_${i}`
                 pSystem.particles[i].position.set(
-                    positionsAndRotations[0],
-                    positionsAndRotations[1],
-                    positionsAndRotations[2]
+                    positionsAndRotations[j],
+                    positionsAndRotations[j+1],
+                    positionsAndRotations[j+2]
                 );
                 pSystem.particles[i].rotationQuaternion = new BABYLON.Quaternion(
                     positionsAndRotations[j+3],
@@ -1628,9 +1641,9 @@ export const babylonRoutes = {
                 if(physics && settings.collisionType) {
                     settings._id = pid;
                     settings.position = {
-                        x:positionsAndRotations[0],
-                        y:positionsAndRotations[1],
-                        z:positionsAndRotations[2]
+                        x:positionsAndRotations[j],
+                        y:positionsAndRotations[j+1],
+                        z:positionsAndRotations[j+2]
                     };
                     settings.rotation = {
                         x:positionsAndRotations[j+3],
@@ -1638,7 +1651,12 @@ export const babylonRoutes = {
                         z:positionsAndRotations[j+5],
                         w:positionsAndRotations[j+6]
                     };
-                    physics.post('addPhysicsEntity',[settings]);
+                    if(pSettings?.[i]) {
+                        if(pSettings[i]) Object.assign(settings, pSettings[i]);
+                    }
+                    if(i === pSystem.nbParticles - 1)
+                        p = physics.run('addPhysicsEntity',[settings]); //await last call
+                    else physics.post('addPhysicsEntity',[settings]);
                 }
             }
         }
@@ -1646,17 +1664,22 @@ export const babylonRoutes = {
         // pSystem.updateParticle = (particle) => {
         //     return particle;
         // }
+        
+        if(animated)
+            scene.onAfterRenderObservable.add(() => {
+                pSystem.setParticles();
+            })
 
         pSystem.initParticles();
         pSystem.setParticles();
 
-        // pSystem.refreshVisibleSize()
-        // pSystem.isAlwaysVisible = true; 
+        if(p) await p; //await last call
+
+        //pSystem.refreshVisibleSize()
+        pSystem.isAlwaysVisible = true; 
 
         this.__graph.particleSystems[_id] = pSystem;
-
         return _id;
-
     },
     updateBabylonEntities:function(
         data:{
@@ -1685,6 +1708,7 @@ export const babylonRoutes = {
         const scene = ctx.scene as BABYLON.Scene;
 
         let contactOffset = 0;
+
     
         if((data as any)._ids && data.buffer) { //array buffer
             const offset = 7;
@@ -1721,8 +1745,6 @@ export const babylonRoutes = {
                 }
 
             }
-
-       
         }
         else if(typeof data === 'object') { //key-value pairs
             let i = 0;
@@ -1800,8 +1822,6 @@ export const babylonRoutes = {
                             undefined,
                             (ctx as any)._id
                         );
-
-                        
 
                         return true;
                     }
