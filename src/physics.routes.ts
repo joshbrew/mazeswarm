@@ -180,7 +180,9 @@ export const physicsRoutes = {
         if(getValues) {
 
             let data = {
-                contacts:{}
+                _ids:[],
+                contacts:[], //flat array
+                contactCounts:[],
             } as any;
             if(buffered) {
                 data.buffer = [];
@@ -189,7 +191,6 @@ export const physicsRoutes = {
             let bufferValues = (body:RAPIER.RigidBody) => {
                 if(body.isMoving()) { //we don't need to buffer static or kinematic body positions as they are assumed fixed and/or externally updated
                     if(buffered) {
-                        if(!data._ids) data._ids = [];
                         let offset = idx*7;
                         let position = body.translation();
                         let rotation = body.rotation();
@@ -205,27 +206,44 @@ export const physicsRoutes = {
                         data._ids.push((body as any)._id); //we have ids custom defined on rigid bodies
 
                         //get contact events for each body and report
-                        world.contactPairsWith(body.collider(0), (collider2) => { //todo make this efficient 
-                            if(!data.contacts[(body as any)._id]) data.contacts[(body as any)._id] = [];
-                            data.contacts[(body as any)._id].push((collider2 as any).parent()._id);
-                        });
+                        let contactCount = 0;
+
+                        let contacts = [] as string[];
+                        if((body as any).reportCollisions !== false)
+                            world.contactPairsWith(body.collider(0), (collider2) => { //todo make this efficient 
+                                const cId = (collider2 as any).parent()._id;
+                                data.contacts.push(cId); // Add contact directly to the flat list
+                                contacts.push(cId);
+                                contactCount++;
+                            });
 
                         //@ts-ignore
-                        this.__graph.get((body as any)._id).contacts = data.contacts[(body as any)._id];
+                        this.__graph.get((body as any)._id).contacts = contacts;
+
+                        data.contactCounts.push(contactCount); // Store the number of contacts for this body
+        
                     }
                     else {
                         data.buffer[(body as any)._id] = {
                             position:body.translation(),
                             rotation:body.rotation()
                         }
-                        //get contact events for each body and report
-                        world.contactPairsWith(body.collider(0), (collider2) => {
-                            if(!data.contacts[(body as any)._id]) data.contacts[(body as any)._id] = [];
-                            data.contacts[(body as any)._id].push((collider2 as any).parent()._id);
-                        });
+                        
+                        let contactCount = 0;
+
+                        let contacts = [] as string[];
+                        if((body as any).reportCollisions !== false)
+                            world.contactPairsWith(body.collider(0), (collider2) => { //todo make this efficient 
+                                const cId = (collider2 as any).parent()._id;
+                                data.contacts.push(cId); // Add contact directly to the flat list
+                                contacts.push(cId);
+                                contactCount++;
+                            });
 
                         //@ts-ignore
-                        this.__graph.get((body as any)._id).contacts = data.contacts[(body as any)._id];
+                        this.__graph.get((body as any)._id).contacts = contacts;
+
+                        data.contactCounts.push(contactCount); // Store the number of contacts for this body
                     }
                     idx++;
                 }
@@ -233,7 +251,8 @@ export const physicsRoutes = {
 
             world.bodies.forEach(bufferValues);
 
-            if(buffered) data.buffer = new Float32Array(data.buffer); //makes it transferrable (and is automatically transferred in our worker system)
+            if(buffered) data.buffer = new Float32Array(data.buffer); //makes it transferable (and is automatically transferred in our worker system)
+            data.contactCounts = new Float32Array(data.contactCounts); //transferable
             //console.log(data);
             if(idx > 0) return data; //return data
             else return;
@@ -391,6 +410,7 @@ function makeCollisionGroupFilter(collisionGroups:number[], collisionFilters?:nu
 
 function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigidbody: RAPIER.RigidBody, collider?:RAPIER.ColliderDesc|RAPIER.Collider, graph?) {
     if(collider) {
+
         if(typeof settings.density === 'number') {
             collider.setDensity(settings.density);
         }
@@ -441,7 +461,11 @@ function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigi
         }
     }
 
-    if(settings.ccd) rigidbody.enableCcd(settings.ccd);
+    if(typeof settings.ccd === 'boolean') rigidbody.enableCcd(settings.ccd);
+
+    if(typeof settings.reportCollisions === 'boolean') {
+        (rigidbody as any).reportCollisions = settings.reportCollisions; //report collisions to babylon thread
+    }
 
     if(typeof settings.linearDamping === 'number') {
         rigidbody.setLinearDamping(settings.linearDamping);

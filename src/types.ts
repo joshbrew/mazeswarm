@@ -10,6 +10,7 @@ export type PhysicsEntityProps = {
     dynamic?:boolean|'kinematicP'|'kinematicV', //kinematic P and V let you manually update positions or velocities 
         // respectively to be treated correctly in the physics world to indicate forces. They will not trigger isMoving() in Rapier however and must be 
         //  manually tracked in the renderer
+    reportCollisions?:boolean, //report collisions over babylon thread? default true, can save some time
     position?:Vec3,
     rotation?:Quat,
     field?:number, //index of active flowfield(s), todo: we could support as many as we want for multiple force vectors

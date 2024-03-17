@@ -1666,15 +1666,13 @@ export const babylonRoutes = {
                     rotation:{x:number,y:number,z:number,w:number},
                 }
             },
-            contacts?:{
-                [id:string]:string[]
-            } //ids of meshes this body is in contact with
+            contacts:string[],
+            contactCounts:number[]
         }|{
             buffer:number[],
             _ids:string[],
-            contacts?:{
-                [id:string]:string[]
-            } //ids of meshes this body is in contact with
+            contacts:string[],
+            contactCounts:number[]
         },
         ctx?:WorkerCanvas|string 
     ) {
@@ -1686,10 +1684,11 @@ export const babylonRoutes = {
 
         const scene = ctx.scene as BABYLON.Scene;
 
+        let contactOffset = 0;
     
         if((data as any)._ids && data.buffer) { //array buffer
             const offset = 7;
-
+            
             const entities = this.__graph.entities;
 
             for(let i = 0; i < (data as any)._ids.length; i++) {
@@ -1700,10 +1699,12 @@ export const babylonRoutes = {
             
                 if(!mesh) continue;
 
-                if(data.contacts?.[_id]) {
-                    mesh.contacts = data.contacts[_id];
+                if(data.contactCounts[i] > 0) {
+                    mesh.contacts = data.contacts.slice(contactOffset,contactOffset+data.contactCounts[i]);
                 } else if(mesh.contacts) delete mesh.contacts; //delete old contacts on this frame
-            
+                
+                contactOffset += data.contactCounts[i];
+
                 mesh.position.set(
                     data.buffer[j],
                     data.buffer[j+1],
@@ -1724,6 +1725,7 @@ export const babylonRoutes = {
        
         }
         else if(typeof data === 'object') { //key-value pairs
+            let i = 0;
             for(const key in data.buffer) {
                 //if(idx === 0) { idx++; continue; }
                 let mesh = this.__graph.entities[key] || scene.getNodeByName(key) as PhysicsMesh;//scene.getMeshByName(key) as PhysicsMesh;
@@ -1745,10 +1747,12 @@ export const babylonRoutes = {
                         );
                     }
 
-                    if(data.contacts?.[key]) {
-                        mesh.contacts = data.contacts[key];
+                    if(data.contactCounts[i] > 0) {
+                        mesh.contacts = data.contacts.slice(contactOffset,contactOffset+data.contactCounts[i]);
                     } else if(mesh.contacts) delete mesh.contacts; //delete old contacts on this frame
+                    contactOffset += data.contactCounts[i];
                 }
+                i++;
             }
         }
 
