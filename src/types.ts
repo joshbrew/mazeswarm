@@ -28,6 +28,8 @@ export type PhysicsEntityProps = {
     diffuseColor?:{r:number,g:number,b:number},
     specularColor?:{r:number,g:number,b:number},
     alpha?:number,
+    hasShadow?:boolean, //default true
+    culling?:boolean, //default false for instances (expensive on cpu)
 
     sprite?:{
         path:string, //rel sprite path

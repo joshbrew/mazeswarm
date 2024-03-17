@@ -262,6 +262,7 @@ export const mazeRoutes = {
                     mass:10,
                     position:{y:0.2, x:randomCell.x - 1, z:randomCell.y - 1}, //get random start cell position, place within inner 5x5 block of a 7x7 block
                     instance:true,
+                    hasShadow:false,
                     field:Math.random() > 0.5 ? startField : undefined
                 }
             
@@ -532,7 +533,7 @@ export const mazeRoutes = {
             //for(let i = 0; i < nEntities; i++) {
                 //const _id = 'blorb'+i; //todo: generalize
                 //let entity = this.__graph.get(_id) as RAPIER.RigidBody & { field: number, contacts:string[] };
-                const position = entity.translation();              
+                const position = entity.position || entity.translation();              
                 if(
                     Math.abs(position.x-player_p.x) < 1.5 && //if we're in the cell of the destination of the field
                     Math.abs(position.z-player_p.z) < 1.5

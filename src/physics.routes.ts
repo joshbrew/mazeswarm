@@ -141,7 +141,7 @@ export const physicsRoutes = {
             let hasRotation = (updates.length / world.bodies.len()) === 7;
             let offset = hasRotation ? 7 : 3;
 
-            const update = (body)=>{
+            const update = (body:RAPIER.RigidBody)=>{
                 let j = i * offset;
                 body.setTranslation(
                     {
@@ -177,6 +177,8 @@ export const physicsRoutes = {
         
         world.step();
 
+        
+
         if(getValues) {
 
             let data = {
@@ -184,16 +186,18 @@ export const physicsRoutes = {
                 contacts:[], //flat array
                 contactCounts:[],
             } as any;
-            if(buffered) {
+            if(buffered) { //serialization with float32array (rapier does not have good raw buffer access)
                 data.buffer = [];
             } else data.buffer = {};
             let idx = 0;
             let bufferValues = (body:RAPIER.RigidBody) => {
+                
                 if(body.isMoving()) { //we don't need to buffer static or kinematic body positions as they are assumed fixed and/or externally updated
                     if(buffered) {
                         let offset = idx*7;
                         let position = body.translation();
                         let rotation = body.rotation();
+                        (body as any).position = position;  (body as any).rot = rotation; //store latest for redundancy prevention
 
                         data.buffer[offset]   = position.x;
                         data.buffer[offset+1] = position.y;
@@ -408,7 +412,12 @@ function makeCollisionGroupFilter(collisionGroups:number[], collisionFilters?:nu
     return parseInt(filter);
 }
 
-function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigidbody: RAPIER.RigidBody, collider?:RAPIER.ColliderDesc|RAPIER.Collider, graph?) {
+function setEntitySettings(
+    world:RAPIER.World, 
+    settings:PhysicsEntityProps, 
+    rigidbody: RAPIER.RigidBody, 
+    collider?:RAPIER.ColliderDesc|RAPIER.Collider
+) {
     if(collider) {
 
         if(typeof settings.density === 'number') {
@@ -476,9 +485,11 @@ function setEntitySettings(world:RAPIER.World, settings:PhysicsEntityProps, rigi
 
     if(settings.position) {
         rigidbody.setTranslation(settings.position,false);
+        (rigidbody as any).position = settings.position; //store latest to prevent redundant accessors
     }
     if(settings.rotation) {
         rigidbody.setRotation(settings.rotation,false);
+        (rigidbody as any).rot = settings.rotation; //store latest to prevent redundant accessors
     }
 
     if(settings.impulse) {

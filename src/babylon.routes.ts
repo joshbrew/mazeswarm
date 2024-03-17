@@ -116,18 +116,21 @@ export const babylonRoutes = {
         
                         const light = new BABYLON.SpotLight(
                             'light1', 
-                            new BABYLON.Vector3(0,90,0),
+                            new BABYLON.Vector3(0,75,0),
                             new BABYLON.Vector3(0,-1,0),
-                            1,
+                            Math.PI/2,
                             2,
                             scene
                         );
+
                         light.shadowEnabled = true;
-                        const shadowGenerator = new BABYLON.ShadowGenerator(1024,light);
-                        shadowGenerator.usePoissonSampling = true;
+                        const shadowGenerator = new BABYLON.ShadowGenerator(2048,light);
                         ctx.shadowGenerator = shadowGenerator;
+                        shadowGenerator.usePoissonSampling = true;
                         
                         ctx.shadowMap = shadowGenerator.getShadowMap();
+
+                        //(scene as any)._skipFrustumClipping = true
         
                         let entityNames = [] as any;
         
@@ -1346,6 +1349,10 @@ export const babylonRoutes = {
             if (!settings._id) settings._id = `${settings.collisionType}${Math.floor(Math.random() * 1000000000000000)}`;
             
             entity = template.createInstance(settings._id) as PhysicsMesh;
+
+            // if(settings.culling !== false)
+            //     entity.alwaysSelectAsActiveMesh = true; //skip instance frustum culling
+            
             if(!ctx.instances) ctx.instances = {}
             ctx.instances[settings._id] = entity;
 
@@ -1502,7 +1509,7 @@ export const babylonRoutes = {
             } else entity.rotationQuaternion = new BABYLON.Quaternion();
         
 
-            if(ctx.shadowGenerator) {
+            if(ctx.shadowGenerator && settings.hasShadow !== false) {
                 (ctx.shadowGenerator as BABYLON.ShadowGenerator).addShadowCaster(entity);
             }
         
@@ -1907,7 +1914,7 @@ export const babylonRoutes = {
         
         const dimensions = allowDiagonal ? {height: 1, width: 0.05, depth: 1/Math.sqrt(6)} : {height: 1, width: 0.1, depth: 1}
 
-        wallTemplate = BABYLON.MeshBuilder.CreateBox('wall_', dimensions, scene);
+        wallTemplate = BABYLON.MeshBuilder.CreateBox('wall_', dimensions, scene) as BABYLON.Mesh;
 
         wallTemplate.receiveShadows = true;
         wallTemplate.isVisible = false; // Set the original wall as invisible; it's just a template
@@ -1915,7 +1922,6 @@ export const babylonRoutes = {
 
         let wallMaterial = new BABYLON.StandardMaterial("wallMaterial", scene);
         //wallMaterial.disableLighting = true;
-        wallMaterial.freeze();
 
         (wallMaterial as any).shadowEnabled = true;
 
@@ -1935,7 +1941,6 @@ export const babylonRoutes = {
             //instance.alwaysSelectAsActiveMesh = true;
             shadowMap.renderList.push(instance);
             instance.rotationQuaternion = new BABYLON.Quaternion();
-
             // Apply the color to the instance
             if(color) (instance as any).color = color; // Set the color directly to the instance
             else instance.color = new BABYLON.Color4(1,1,1,1);
@@ -2034,6 +2039,9 @@ export const babylonRoutes = {
                 }
             });
 
+            instance.freezeWorldMatrix();
+            //instance.alwaysSelectAsActiveMesh = true;
+
             return instance;
         }
 
@@ -2057,7 +2065,7 @@ export const babylonRoutes = {
             const _id = 'tile_' + cell.x + '_' + cell.y;
             let instance = (cell.isStart || cell.isEnd) ? BABYLON.MeshBuilder.CreateBox('tile_', {height: 1, width: 1, depth: 0.1}, scene) : floorTileTemplate.createInstance(_id);
             instance.position = new BABYLON.Vector3((cell.x - cellOffset), 0, (cell.y - cellOffset)); // Adjust position to account for size
-           
+            
             //instance.alwaysSelectAsActiveMesh = true;
             instance.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(Math.PI / 2,0,0); // Rotate to lay flat
             shadowMap.renderList.push(instance);
@@ -2082,7 +2090,6 @@ export const babylonRoutes = {
                 tileMaterial.diffuseColor = color;
 
                 instance.material = tileMaterial
-                tileMaterial.freeze();
 
             } else {
                 let color = new BABYLON.Color4(0.0, 0.0, 0.2, 1); // default color (gray)
@@ -2109,6 +2116,10 @@ export const babylonRoutes = {
                     w:instance.rotationQuaternion._w
                 }
             });
+
+            
+            instance.freezeWorldMatrix();
+            //instance.alwaysSelectAsActiveMesh = true;
 
             return instance;
         }
@@ -2232,8 +2243,15 @@ export const babylonRoutes = {
             wallTemplate.setVerticesBuffer(buffer2);
             wallTemplate.material = wallMaterial;
 
+            wallMaterial.freeze();
+            tileMaterial.freeze();
+
+            // wallTemplate.alwaysSelectAsActiveMesh = true;
+            // floorTileTemplate.alwaysSelectAsActiveMesh = true;
+
             wallTemplate.freezeWorldMatrix();
             floorTileTemplate.freezeWorldMatrix();
+
         }
 
 
