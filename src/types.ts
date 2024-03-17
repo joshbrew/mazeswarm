@@ -3,6 +3,7 @@ export type Quat = {x:number,y:number,z:number,w:number}
 
 export type PhysicsEntityProps = {
     _id:string, //needs to be unique to sync the threads
+    hasCollisions:boolean, //default true
     collisionType:'ball'|'cuboid'|'capsule'|'cone'|'cylinder'|'triangle'|'segment'|'trimesh'| 
         'convexHull'|'convexMesh'|'heightfield'|'polyline'|
         'roundCone'|'roundTriangle'|'roundCylinder'|'roundCuboid'|'roundConvexHull'|'roundConvexMesh',

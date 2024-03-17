@@ -124,7 +124,7 @@ export const babylonRoutes = {
                         );
                         light.shadowEnabled = true;
                         const shadowGenerator = new BABYLON.ShadowGenerator(1024,light);
-                        shadowGenerator.usePercentageCloserFiltering = true;
+                        shadowGenerator.usePoissonSampling = true;
                         ctx.shadowGenerator = shadowGenerator;
                         
                         ctx.shadowMap = shadowGenerator.getShadowMap();
@@ -174,7 +174,7 @@ export const babylonRoutes = {
         ctx?:string|WorkerCanvas
     ) {
         if(!(ctx as WorkerCanvas)?.scene)
-            ctx = this.__graph.run('getCanvas', ctx);
+            ctx = this.__graph.run('getCanvas', typeof ctx === 'string' ? ctx : undefined);
 
         if(typeof ctx === 'object' && ctx.scene) {
             let timestep = performance.now();
@@ -1304,7 +1304,7 @@ export const babylonRoutes = {
                 // Creation logic for each template type
                 switch (settings.collisionType) {
                     case 'ball':
-                        template = BABYLON.MeshBuilder.CreateSphere(settings.collisionType+'TEMPLATE', { diameter: 2, segments: 8 }, scene);
+                        template = BABYLON.MeshBuilder.CreateSphere(settings.collisionType+'TEMPLATE', { diameter: 2, segments: 6 }, scene);
                         const sphereMat = new BABYLON.StandardMaterial('spheremat', scene);
                         template.material = sphereMat;
                         sphereMat.diffuseColor = new BABYLON.Color3(1,1,0);
@@ -1345,6 +1345,8 @@ export const babylonRoutes = {
             if (!settings._id) settings._id = `${settings.collisionType}${Math.floor(Math.random() * 1000000000000000)}`;
             
             entity = template.createInstance(settings._id) as PhysicsMesh;
+            if(!ctx.instances) ctx.instances = {}
+            ctx.instances[settings._id] = entity;
 
             // Apply settings to the instance
             if (settings.position) {
@@ -1518,7 +1520,7 @@ export const babylonRoutes = {
             ctx.entities[entity.id] = settings;
 
             //todo: check for redundancy
-            if(ctx.physicsPort) {
+            if(ctx.physicsPort && settings.hasCollisions !== false) {
                 const physicsWorker = this.__graph.workers[ctx.physicsPort];
                 (physicsWorker as WorkerInfo).post('addPhysicsEntity', [settings]);
             }
@@ -1865,6 +1867,7 @@ export const babylonRoutes = {
 
         //quick references
         delete ctx.entities[_id];
+        if(ctx.instances?.[_id]) delete ctx.instances[_id]; //if the entity is a particle
         if(ctx.animations?.[_id]) delete ctx.animations[_id]; //if any animations defined for this mesh
         if(ctx.particles?.[_id]) delete ctx.particles[_id]; //if the entity is a particle
 
