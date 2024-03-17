@@ -205,7 +205,7 @@ export const physicsRoutes = {
                         data._ids.push((body as any)._id); //we have ids custom defined on rigid bodies
 
                         //get contact events for each body and report
-                        world.contactPairsWith(body.collider(0), (collider2) => {
+                        world.contactPairsWith(body.collider(0), (collider2) => { //todo make this efficient 
                             if(!data.contacts[(body as any)._id]) data.contacts[(body as any)._id] = [];
                             data.contacts[(body as any)._id].push((collider2 as any).parent()._id);
                         });
