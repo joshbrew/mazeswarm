@@ -565,10 +565,12 @@ export const mazeRoutes = {
   
                 const field = fields[entity.field] as FlowField;
 
-                const direction = field.getFlowDirection(fieldX, fieldY);
-                let cost = field.getCost(fieldX, fieldY);
+                const idx = field.index(fieldX,fieldY);
+                const directionX = (field.flowFieldX as Float32Array)[idx];
+                const directionY = (field.flowFieldY as Float32Array)[idx];
+                let cost = field.costField[idx];
 
-                if (direction && cost !== 0 && cost !== Infinity) {
+                if ((directionX !== 0 || directionY !== 0) && cost !== 0 && cost !== Infinity) {
                     const impulse = 0.5 / cost; //scale according to time tick too
 
                     //console.log(direction,cost);
@@ -585,8 +587,8 @@ export const mazeRoutes = {
                     }
 
                     entity.lastImpulse = {
-                        x:impulse*direction.x,
-                        z:impulse*direction.y, //z is y in babylonjs at based on our logic
+                        x:impulse*directionX,
+                        z:impulse*directionY, //z is y in babylonjs at based on our logic
                         y
                     };
 
