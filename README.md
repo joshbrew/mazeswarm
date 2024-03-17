@@ -42,6 +42,10 @@ Runs at 60-100fps no problem on my laptop, plenty could be further optimized as 
 
 ### Benchmark
 
+![benchmark](./benchmark2.png)
+
+Current benchmarks on an RTX3070 + i7-10750H. Tasks running in 8-11 microseconds with ~4000 3D entities. This needs to improve, for rendering this means swapping in a thinner instancing system to avoid the expensive evaluateActiveMeshes call, for the physics this might mean swapping to Babylon's Havok plugin instead of Rapier as it is thread-limited. Swapping in WebGPU will be a major boost, but it should work better with the 7.0 update in a week, but we are stuck with the physics bottlenecks. This is currently good enough for 60-90fps gameplay, however.
+
 ![benchmark](./benchmark.png)
 
 Baseline performance is on the order of microseconds. This is just with two crowd entities, a player, a number of other physics objects, and a single light source.
