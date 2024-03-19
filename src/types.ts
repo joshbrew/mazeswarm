@@ -23,13 +23,19 @@ export type PhysicsEntityProps = {
     density?:number,
     friction?:number,
     restitution?:number,
+
+
     instance?:boolean, //use an instanced mesh instead of a new object (better for renders)
+    manualUpdate?:boolean, //manually update world matrices
+    
 
     diffuseColor?:{r:number,g:number,b:number},
     specularColor?:{r:number,g:number,b:number},
     alpha?:number,
     hasShadow?:boolean, //default true
+    
     culling?:boolean, //default false for instances (expensive on cpu)
+    pickable?:boolean,
 
     sprite?:{
         path:string, //rel sprite path
@@ -70,5 +76,6 @@ export type PhysicsMesh = (BABYLON.Mesh | BABYLON.InstancedMesh) & {
     contacts?:string[], 
     dynamic?:boolean | "kinematicP" | "kinematicV" , collisionType?:string, navMesh?:boolean, 
     crowd?:string, agentState?:string|number, patrol?:Vec3[], origin?:Vec3,
-    field?:number
+    field?:number,
+    template?:any
 };

@@ -261,13 +261,16 @@ export const mazeRoutes = {
                     radius:0.05,
                     mass:10,
                     position:{y:0.2, x:randomCell.x - 1, z:randomCell.y - 1}, //get random start cell position, place within inner 5x5 block of a 7x7 block
-                    instance:true,
+                    instance:'blorb',
                     hasShadow:false,
-                    field:Math.random() > 0.5 ? startField : undefined
+                    field:Math.random() > 0.5 ? startField : undefined,
+                    manualUpdate:true,
+                    pickable:false,
+                    culling:false
                 }
             
                 if(i === nEntities - 1)
-                    prom = renderThread.run('addEntity',entitySettings);
+                    prom = renderThread.run('addEntity',entitySettings); //the last call should execute serially, so we can await the last promise
                 else
                     renderThread.post('addEntity',entitySettings)
 
@@ -293,7 +296,6 @@ export const mazeRoutes = {
         // ]);
 
         let r = await prom;
-        console.log(r);
         
         for(let i = 0; i < nEntities; i++) {
             const _id = 'blorb_'+i; //todo: generalize

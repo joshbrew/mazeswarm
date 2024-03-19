@@ -22,7 +22,9 @@ export type PhysicsMesh = (BABYLON.Mesh | BABYLON.InstancedMesh) & {
     contacts?:string[], 
     dynamic?:boolean | "kinematicP" | "kinematicV" , collisionType?:string, navMesh?:boolean, 
     crowd?:string, agentState?:string|number, patrol?:Vec3[], origin?:Vec3,
-    field?:number
+    field?:number,
+    template?:BABYLON.Mesh, //instance master mesh
+    mat?:BABYLON.Matrix //instance manual world transform matrix
 };
 
 function recursivelyAssign (target,obj) {
@@ -140,7 +142,7 @@ export const babylonRoutes = {
                                 entityNames[i] = e._id;
                                 return mesh;
                             }) as BABYLON.Mesh[];
-                            this.__graph.entities = meshes;
+                            ctx.entities = meshes;
                         }
                         return entityNames;
                 //       res(entityNames);
@@ -1294,27 +1296,26 @@ export const babylonRoutes = {
         const scene = ctx.scene as BABYLON.Scene;
         let entity: PhysicsMesh | undefined; // Assuming PhysicsMesh is a type alias for BABYLON.Mesh
     
-        
-        if(!this.__graph.entities) this.__graph.entities = {};
+        if(!ctx.entities) ctx.entities = {};
 
         if(settings.navMesh && settings.instance) 
             settings.instance = false; //TEMP,  FIX NAVMESH CALL TO USE THE PARENT INSTANCE FOR INSTANCES
         //limited settings rn for simplicity to work with the physics engine
         if(settings.instance) {
             // right now instances break navmeshes because we need to pass the parent only
-            let template = scene.getMeshById(settings.collisionType+'TEMPLATE') as BABYLON.Mesh;
+            let template = scene.getMeshById((typeof settings.instance === 'string' ? settings.instance : settings.collisionType)+'TEMPLATE') as BABYLON.Mesh;
             if (!template) {
                 // Creation logic for each template type
                 switch (settings.collisionType) {
                     case 'ball':
-                        template = BABYLON.MeshBuilder.CreateSphere(settings.collisionType+'TEMPLATE', { diameter: 2, segments: 6 }, scene);
+                        template = BABYLON.MeshBuilder.CreateSphere((typeof settings.instance === 'string' ? settings.instance : settings.collisionType)+'TEMPLATE', { diameter: 2, segments: 6 }, scene);
                         const sphereMat = new BABYLON.StandardMaterial('spheremat', scene);
                         template.material = sphereMat;
                         sphereMat.diffuseColor = new BABYLON.Color3(1,1,0);
                         sphereMat.freeze();
                         break;
                     case 'capsule':
-                        template = BABYLON.MeshBuilder.CreateCapsule(settings.collisionType+'TEMPLATE', {
+                        template = BABYLON.MeshBuilder.CreateCapsule((typeof settings.instance === 'string' ? settings.instance : settings.collisionType)+'TEMPLATE', {
                             radius: 1,
                             height: 4,
                             tessellation: 12,
@@ -1324,23 +1325,28 @@ export const babylonRoutes = {
                         template.material = capsuleMat;
                         break;
                     case 'cuboid':
-                        template = BABYLON.MeshBuilder.CreateBox(settings.collisionType+'TEMPLATE', { width: 1, height: 1, depth: 1 }, scene);
+                        template = BABYLON.MeshBuilder.CreateBox((typeof settings.instance === 'string' ? settings.instance : settings.collisionType)+'TEMPLATE', { width: 1, height: 1, depth: 1 }, scene);
                         const boxMat = new BABYLON.StandardMaterial('boxmat', scene);
                         template.material = boxMat;
                         break;
                     case 'cylinder':
-                        template = BABYLON.MeshBuilder.CreateCylinder(settings.collisionType+'TEMPLATE', { height: 2, diameter: 2, tessellation: 12 }, scene);
+                        template = BABYLON.MeshBuilder.CreateCylinder((typeof settings.instance === 'string' ? settings.instance : settings.collisionType)+'TEMPLATE', { height: 2, diameter: 2, tessellation: 12 }, scene);
                         
                         const cylmat = new BABYLON.StandardMaterial('cylmat', scene);
                         template.material = cylmat;
                         break;
                     case 'cone':
-                        template = BABYLON.MeshBuilder.CreateCylinder(settings.collisionType+'TEMPLATE', { height: 2, diameterTop: 0, diameterBottom: 2, tessellation: 12 }, scene);
+                        template = BABYLON.MeshBuilder.CreateCylinder((typeof settings.instance === 'string' ? settings.instance : settings.collisionType)+'TEMPLATE', { height: 2, diameterTop: 0, diameterBottom: 2, tessellation: 12 }, scene);
                         
                         const conemat = new BABYLON.StandardMaterial('conemat', scene);
                         template.material = conemat;
                         break;
                 }
+
+                
+                if(settings.manualUpdate)
+                    template.manualUpdateOfWorldMatrixInstancedBuffer = true;
+
                 template.isVisible = false;
                 template.isPickable = false;
                 template.receiveShadows = true;
@@ -1349,9 +1355,8 @@ export const babylonRoutes = {
             if (!settings._id) settings._id = `${settings.collisionType}${Math.floor(Math.random() * 1000000000000000)}`;
             
             entity = template.createInstance(settings._id) as PhysicsMesh;
+            entity.template = template;
 
-            // if(settings.culling !== false)
-            //     entity.alwaysSelectAsActiveMesh = true; //skip instance frustum culling
             
             if(!ctx.instances) ctx.instances = {}
             ctx.instances[settings._id] = entity;
@@ -1368,7 +1373,7 @@ export const babylonRoutes = {
                     settings.rotation.z,
                     settings.rotation.w
                 );
-            } else entity.rotationQuaternion = new BABYLON.Quaternion();
+            } else entity.rotationQuaternion = new BABYLON.Quaternion(); //needs to be defined to match rapier outputs
 
             // Apply original dimensions, radius, or halfHeight settings with proper scaling
             switch (settings.collisionType) {
@@ -1485,13 +1490,21 @@ export const babylonRoutes = {
                 ctx.animations[settings._id] = settings.animation;
             }
 
+            
+            if(settings.culling === false)
+                entity.alwaysSelectAsActiveMesh = true; //skip instance frustum culling
+
+            if(settings.pickable === false)
+                entity.isPickable = false;
+
             entity.dynamic = settings.dynamic;
             entity.crowd = settings.crowd;
             entity.navMesh = settings.navMesh;
             entity.collisionType = settings.collisionType;
             entity.field = settings.field;
 
-            this.__graph.entities[settings._id] = entity;
+            if(!ctx.entities) ctx.entities = {};
+            ctx.entities[settings._id] = entity;
 
             if(settings.position) {
                 entity.position.x = settings.position.x;
@@ -1517,16 +1530,14 @@ export const babylonRoutes = {
                 {
                     __node:{ tag:settings._id },
                     __ondisconnected:function (node) {
-                        if((ctx as WorkerCanvas).entities[(entity as PhysicsMesh).id]) this.__graph.run('removeEntity', settings._id, ctx);
+                        if((ctx as WorkerCanvas).entities[(entity as PhysicsMesh).id]) 
+                            this.__graph.run('removeEntity', settings._id, ctx);
                     }
                 }
             );
 
             node.__proxyObject(entity);
             
-            if(!ctx.entities) ctx.entities = {};
-            ctx.entities[entity.id] = settings;
-
             //todo: check for redundancy
             if(ctx.physicsPort && settings.hasCollisions !== false) {
                 const physicsWorker = this.__graph.workers[ctx.physicsPort];
@@ -1644,9 +1655,9 @@ export const babylonRoutes = {
                     positionsAndRotations[j+4],
                     positionsAndRotations[j+5],
                     positionsAndRotations[j+6]
-                )
-                this.__graph.entities[pid] = pSystem.particles[i]; //store this on graph
-                this.__graph.particles[pid] = pSystem.particles[i]; //specific reference for solid particle instances
+                );
+                (ctx as WorkerCanvas).entities[pid] = pSystem.particles[i]; //store this on graph
+                (ctx as WorkerCanvas).particles[pid] = pSystem.particles[i]; //specific reference for solid particle instances
             
                 if(physics && settings.collisionType) {
                     settings._id = pid;
@@ -1723,14 +1734,21 @@ export const babylonRoutes = {
         if((data as any)._ids && data.buffer) { //array buffer
             const offset = 7;
             
-            const entities = this.__graph.entities;
+            const entities = (ctx as WorkerCanvas).entities;
+            const instances = (ctx as WorkerCanvas).instances;
+
+            const instancesUpdated = {};
+            const instanceWorldMatrices = {}; //if manually updating world matrix
+
+            const buffer = data.buffer;
 
             for(let i = 0; i < (data as any)._ids.length; i++) {
                 const _id = (data as any)._ids[i]; 
                 let j = i*offset;
                 
-                let mesh = entities[_id] || scene.getNodeByName(_id as string) as PhysicsMesh//scene.getMeshByName(e._id as string) as PhysicsMesh;
-            
+                let mesh = (entities[_id] || scene.getNodeByName(_id as string)) as PhysicsMesh//scene.getMeshByName(e._id as string) as PhysicsMesh;
+                
+
                 if(!mesh) continue;
 
                 if(data.contactCounts[i] > 0) {
@@ -1739,28 +1757,70 @@ export const babylonRoutes = {
                 
                 contactOffset += data.contactCounts[i];
 
-                mesh.position.set(
-                    data.buffer[j],
-                    data.buffer[j+1],
-                    data.buffer[j+2]
-                );
+                if(mesh.template?.manualUpdateOfWorldMatrixInstancedBuffer) { //this is an instance
+                    if(!instancesUpdated[mesh.template.id]) {
+                        instancesUpdated[mesh.template.id] = mesh.template; 
+                        instanceWorldMatrices[mesh.template.id] = mesh.template.worldMatrixInstancedBuffer;
+                    }
+                    if(!mesh.mat)
+                        mesh.mat = new BABYLON.Matrix();
 
-                if(mesh.rotationQuaternion) {
-                    mesh.rotationQuaternion.set(
-                        data.buffer[j+3],
-                        data.buffer[j+4],
-                        data.buffer[j+5],
-                        data.buffer[j+6]
-                    ); 
+                    const worldMatrixBuf = instanceWorldMatrices[mesh.template.id];
+                    if(!worldMatrixBuf) continue; //skip
+
+                    const pos = mesh.position;
+                    const rot = mesh.rotationQuaternion as BABYLON.Quaternion;
+
+                    pos._x = buffer[j];
+                    pos._y = buffer[j+1];
+                    pos._z = buffer[j+2];
+                    rot._x = buffer[j+3];
+                    rot._y = buffer[j+4];
+                    rot._z = buffer[j+5];
+                    rot._w = buffer[j+6];
+
+                    BABYLON.Matrix.ComposeToRef(mesh.scaling, rot, pos, mesh.mat as BABYLON.Matrix)
+                    
+                    worldMatrixBuf.set(
+                        (mesh.mat as BABYLON.Matrix).m, 
+                        (mesh as BABYLON.InstancedMesh)._indexInSourceMeshInstanceArray*16
+                    );
+
+                    //lets perform operations directly on the world matrix buffer 
+
+                } else {
+                    mesh.position.set(
+                        buffer[j],
+                        data.buffer[j+1],
+                        data.buffer[j+2]
+                    );
+    
+                    if(mesh.rotationQuaternion) {
+                        mesh.rotationQuaternion.set(
+                            buffer[j+3],
+                            buffer[j+4],
+                            buffer[j+5],
+                            buffer[j+6]
+                        ); 
+                    }
                 }
 
+              
+
+            }
+
+            for(const key in instancesUpdated) {
+                const masterMesh = instancesUpdated[key] as BABYLON.Mesh;
+                if(masterMesh.manualUpdateOfWorldMatrixInstancedBuffer) {
+
+                }
             }
         }
         else if(typeof data === 'object') { //key-value pairs
             let i = 0;
             for(const key in data.buffer) {
                 //if(idx === 0) { idx++; continue; }
-                let mesh = this.__graph.entities[key] || scene.getNodeByName(key) as PhysicsMesh;//scene.getMeshByName(key) as PhysicsMesh;
+                let mesh = ctx.entities[key] || scene.getNodeByName(key) as PhysicsMesh;//scene.getMeshByName(key) as PhysicsMesh;
                 //console.log(JSON.stringify(mesh?.rotation),JSON.stringify(data[key].rotation))
                 if(mesh) {
                     if(data.buffer[key].position) {
@@ -1804,7 +1864,7 @@ export const babylonRoutes = {
         // const engine = ctx.engine as BABYLON.Engine;
         const scene = ctx.scene as BABYLON.Scene;
 
-        let mesh = scene.getNodeByName(_id as string) as PhysicsMesh;//scene.getMeshByName(_id) as PhysicsMesh;
+        let mesh = ctx.entities[_id] || scene.getNodeByName(_id as string) as PhysicsMesh;//scene.getMeshByName(_id) as PhysicsMesh;
         if(!mesh) return undefined; //already removed
 
         if(ctx.crowds) {
@@ -1941,6 +2001,10 @@ export const babylonRoutes = {
             //instance.alwaysSelectAsActiveMesh = true;
             shadowMap.renderList.push(instance);
             instance.rotationQuaternion = new BABYLON.Quaternion();
+            if(!ctx.instances) ctx.instances = {};
+            if(!isDoor) ctx.instances[_id] = instance; //doors are not instances rn
+            ctx.entities[_id] = instance;
+
             // Apply the color to the instance
             if(color) (instance as any).color = color; // Set the color directly to the instance
             else instance.color = new BABYLON.Color4(1,1,1,1);
@@ -2070,6 +2134,13 @@ export const babylonRoutes = {
             instance.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(Math.PI / 2,0,0); // Rotate to lay flat
             shadowMap.renderList.push(instance);
             // Assign a color to the instance based on cell properties
+            if(!(cell.isStart || cell.isEnd)) {
+                if(!ctx.instances) ctx.instances = {};
+                ctx.instances[_id] = instance;
+            }
+            if(!ctx.instances) ctx.instances = {};
+            ctx.instances[_id] = instance;
+            ctx.entities[_id] = instance;
 
             if(cell.isStart || cell.isEnd) {
                 // Prepare material for all tiles
