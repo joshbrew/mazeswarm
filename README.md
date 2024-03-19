@@ -44,7 +44,7 @@ Runs at 60-100fps no problem on my laptop, plenty could be further optimized as 
 
 ![benchmark](./benchmark2.png)
 
-Current benchmarks on an RTX3070 + i7-10750H. Tasks running in 8-11 microseconds with ~4000 3D entities. This needs to improve, for rendering this means swapping in a thinner instancing system to avoid the expensive evaluateActiveMeshes call, for the physics this might mean swapping to Babylon's Havok plugin instead of Rapier as it is thread-limited. Swapping in WebGPU will be a major boost, but it should work better with the 7.0 update in a week, but we are stuck with the physics bottlenecks. This is currently good enough for 60-90fps gameplay, however.
+Current benchmarks on an RTX3070 + i7-10750H. Tasks running in 8-11 microseconds with ~4000 3D entities. This needs to improve, for rendering this means swapping in a thinner instancing system to avoid the expensive evaluateActiveMeshes call, for the physics this might mean swapping to Babylon's Havok plugin instead of Rapier as it is thread-limited. Swapping in WebGPU will be a major boost, but it should work better with the 7.0 update in a week, but we are stuck with the physics bottlenecks. This is currently good enough for 60-90fps gameplay, however. The GPU calls by comparison are less than half a microsecond (~0.32ms average) so it's not a rendering issue at all. 
 
 ![benchmark](./benchmark.png)
 
