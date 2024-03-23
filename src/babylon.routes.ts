@@ -2369,10 +2369,13 @@ export const babylonRoutes = {
         if(!ctx || typeof ctx === 'string')
             ctx = this.__graph.run('getCanvas',ctx);
 
+        const physicsPort = ctx.physicsPort;
+        const physics = this.__graph.workers[physicsPort] as WorkerInfo;
+
         // Filter all meshes that are instances of walls and floors
         (ctx.scene as BABYLON.Scene).meshes.filter(mesh => {
             if(mesh.name.includes('wall_') || mesh.name.includes('tile_')) {
-                mesh.dispose(undefined,true);
+                this.__graph.run('removeEntity', mesh.name);
                 return true;
             }
         });

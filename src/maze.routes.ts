@@ -566,6 +566,17 @@ export const mazeRoutes = {
                 //let entity = this.__graph.get(_id) as RAPIER.RigidBody & { field: number, contacts:string[] };
                 const position = entity.position || entity.translation();              
                 
+                if( entity.field !== 0 && 
+                    Math.abs(position.x-player_p.x) < 1.5 && //if we're in the cell of the destination of the field
+                    Math.abs(position.z-player_p.z) < 1.5
+                ) {
+                    entity.field = 0;
+                    this.__graph.run(
+                        'onPlayerSeen',
+                        entity._id
+                    );
+                }
+
                 if(!entity || typeof entity.field !== 'number') return;
                 //console.log(_id);
                 let fieldX = Math.floor(position.x*7/cellSize)+7;
@@ -573,6 +584,8 @@ export const mazeRoutes = {
 
                 //swap flowfield to next available when reaching ai goal
                 if(entity.field !== 0) {
+                    
+
                     const flowCell = flowCells[entity.field-1];
       
                     //console.log(entity.field,flowCell,flowCells,fields[entity.field]);
