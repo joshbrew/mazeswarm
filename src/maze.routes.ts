@@ -201,6 +201,11 @@ export const mazeRoutes = {
         //field i+1 can access fields j,
         let accessible = [] as number[][];
 
+        let solutionPath = search.solve(maze.start.x,maze.start.y,maze.end.x,maze.end.y,allowDiagonal); //without keys
+
+        //some kind of way to report the complexity of the map
+        let mapComplexity = solutionPath.length / (maze.width*maze.height);
+
         cells.forEach((cell,i) => {
             accessible.push([]);
             cells.forEach((cell2,j) => {
@@ -302,6 +307,16 @@ export const mazeRoutes = {
             this.__graph.blorbs.push(this.__graph.get(_id));
         }
 
+        renderThread.subscribe('onWin',()=>{
+            
+            if(this.__graph.blorbs) {
+                this.__graph.blorbs.forEach((entity) => {
+                    let newField = nFields > 1 ? Math.floor(Math.random()*(nFields-1)) || 1 : 0; 
+                    entity.field = newField;
+                })
+            }
+        })
+
         //await Promise.all(proms); //entity promises (not most efficient)
 
 
@@ -389,7 +404,7 @@ export const mazeRoutes = {
         //ai activate on player sight, use ray or sphere casts
 
         //send maze data to render thread to initialize the render
-        return true;
+        return mapComplexity;
     },
 
     duplicateMaze:function(celldata,allowDiagonal) {
@@ -512,6 +527,17 @@ export const mazeRoutes = {
             e.field = field;
     },
 
+    //for event scripting
+    onPlayerSeen(entityId) {
+        return entityId; 
+    },
+
+    getEntitiesAfterPlayer() {
+        if(this.__graph.blorbs)
+            return this.__graph.blorbs.filter((v) => {if(v.field === 0) return true}).length;
+        else return false;
+    },
+
     //we should update all of the entities velocities based on flowfield position and report to physics thread to then report back to the render thread
     updatePhysicsEntitiesFromFlowFields:function(
         cellSize = 1
@@ -541,6 +567,10 @@ export const mazeRoutes = {
                     Math.abs(position.z-player_p.z) < 1.5
                 ) {
                     entity.field = 0;
+                    this.__graph.run(
+                        'onPlayerSeen',
+                        entity._id
+                    );
                 }
 
                 if(!entity || typeof entity.field !== 'number') return;

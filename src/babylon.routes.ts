@@ -95,26 +95,27 @@ export const babylonRoutes = {
         
                         //scene picking
                         canvas.addEventListener('mousedown', (ev) => {
-                            let picked = scene.pick(scene.pointerX, scene.pointerY);
+                            if(ctx.controls?.mode !== 'player') {
+                                let picked = scene.pick(scene.pointerX, scene.pointerY);
         
-                            if(picked.pickedMesh?.name === 'player' && ctx.controls?.mode !== 'player') {
-                                
-                                this.__graph.run(
-                                    'addPlayerControls', 
-                                    'player', 
-                                    2, 
-                                    'topdown', 
-                                    ctx
-                                );
-                                //console.log(picked.pickedMesh);
-                            } 
-                            else if(!ctx.controls) {
-                                this.__graph.run('addCameraControls', 0.5, ctx);
+                                if(picked.pickedMesh?.name === 'player' && ctx.controls?.mode !== 'player') {
+                                    
+                                    this.__graph.run(
+                                        'addPlayerControls', 
+                                        'player', 
+                                        2, 
+                                        'topdown', 
+                                        ctx
+                                    );
+                                    //console.log(picked.pickedMesh);
+                                } 
                             }
                                 
                         });
         
-                        setTimeout(() => { engine.setSize(canvas.clientWidth,canvas.clientHeight);  }, 100);
+                        setTimeout(() => { 
+                            engine.setSize(canvas.clientWidth,canvas.clientHeight);  
+                        }, 100);
         
                         const light = new BABYLON.SpotLight(
                             'light1', 
@@ -249,11 +250,11 @@ export const babylonRoutes = {
 
         return scene?.pickWithRay(new BABYLON.Ray(origin,direction,length), filter);
     },
-    onWin() { //report stats
-        return true;
+    onWin(timeMs:number,utcStart:number,utcEnd:number) { //report stats
+        return {timeMs, utcStart, utcEnd};
     }, //subscribe
-    onDie() { //report stats
-        return true;
+    onDie(timeMs:number,utcStart:number,utcEnd:number) { //report stats
+        return {timeMs, utcStart, utcEnd};
     }, //subscribe
     onHPLoss(newHP) {//subscribe
         return newHP;
@@ -285,7 +286,7 @@ export const babylonRoutes = {
 
         if(!physicsThread) return undefined;
 
-        let mesh = scene.getMeshById(meshId) as BABYLON.Mesh;
+        let mesh = scene.getMeshById(meshId) as PhysicsMesh;
         if(!mesh) return undefined;
 
         let acceleration = new BABYLON.Vector3(0,0,0);
@@ -295,7 +296,6 @@ export const babylonRoutes = {
         let bb = mesh.getBoundingInfo().boundingBox;
         mesh.position.y = mesh.position.y - bb.vectors[0].z*0.5; //offset mesh position to account for new fixed z rotation
 
-        let c = ctx as any;
 
         ctx.playerHP = 10;
 
@@ -303,6 +303,9 @@ export const babylonRoutes = {
         let dead = false;
         let win = false;
 
+        ctx.gameStart = Date.now();
+
+        let c = ctx as any; //just to get around some nested ts annoyances
         ctx.animations["player"] = (frameTimeMs) => {
 
             if(c.maze) {
@@ -311,7 +314,8 @@ export const babylonRoutes = {
                 if(!win && relPosX > 0.3 && relPosX < 0.7 && relPosY > 0.3 && relPosY < 0.7) {
                     //send win condition!
                     cleanupControls();
-                    this.__graph.run('onWin');
+                    c.gameEnd = Date.now();
+                    this.__graph.run('onWin',c.gameEnd-c.gameStart,c.gameStart,c.gameEnd);
                     win = true;
                 }
             }
@@ -336,6 +340,7 @@ export const babylonRoutes = {
                 }
             }
 
+
             if(!win && (mesh as PhysicsMesh).contacts) {
                 if(((mesh as PhysicsMesh).contacts as string[]).find((v) => {
                     if(v.startsWith('blorb')) {
@@ -345,10 +350,14 @@ export const babylonRoutes = {
                     c.playerHP -= ((mesh as PhysicsMesh).contacts as string[]).length*frameTimeMs/10000; //reduce hp by frame time and ncontacts so hp is roughly contact-quantity/time based
                     if(!dead && c.playerHP <= 0) {
                         cleanupControls(); //dead
-                        this.__graph.run('onDie');
+                        c.gameEnd = Date.now();
+                        this.__graph.run('onDie',c.gameEnd-c.gameStart,c.gameStart,c.gameEnd);
                         dead = true;
                     } else {
-                        this.__graph.run('onHPLoss', c.playerHP);
+                        this.__graph.run(
+                            'onHPLoss', 
+                            c.playerHP
+                        );
                     }
                 }
             } 
@@ -2124,6 +2133,12 @@ export const babylonRoutes = {
 
         //tileMaterial.emissiveColor = BABYLON.Color3.White();
 
+        //e.g. 20x20 maze = floordimensions = {x:20, y:0, z:20}
+        
+        let floorDimensions = {height:cellSize*maze.width,width:cellSize*maze.height,depth:0.1}; //expand this to cover the full extend of the floor tiles for the physics 
+        let floorPosition = {x:cellSize*maze.width/2 - cellSize,y:0,z:cellSize*maze.height/2 - cellSize};
+        let floorRotation = BABYLON.Quaternion.FromEulerAngles(Math.PI / 2,0,0)
+
         // Function to create and color a floor tile based on the MazeCell
         function createFloorTile(cell, row, col) {
             const _id = 'tile_' + cell.x + '_' + cell.y;
@@ -2170,23 +2185,23 @@ export const babylonRoutes = {
     
             }
           
-            physicsWorker.post('addPhysicsEntity',{
-                _id,
-                collisionType:'cuboid',
-                dimensions:{height: 1, width: 1, depth: 0.1},
-                restitution:1,
-                position:{
-                    x:instance.position.x,
-                    y:instance.position.y,
-                    z:instance.position.z
-                },
-                rotation:{
-                    x:instance.rotationQuaternion._x,
-                    y:instance.rotationQuaternion._y,
-                    z:instance.rotationQuaternion._z,
-                    w:instance.rotationQuaternion._w
-                }
-            });
+            // physicsWorker.post('addPhysicsEntity',{
+            //     _id,
+            //     collisionType:'cuboid',
+            //     dimensions:{height: 1, width: 1, depth: 0.1},
+            //     restitution:1,
+            //     position:{
+            //         x:instance.position.x,
+            //         y:instance.position.y,
+            //         z:instance.position.z
+            //     },
+            //     rotation:{
+            //         x:instance.rotationQuaternion._x,
+            //         y:instance.rotationQuaternion._y,
+            //         z:instance.rotationQuaternion._z,
+            //         w:instance.rotationQuaternion._w
+            //     }
+            // });
 
             
             instance.freezeWorldMatrix();
@@ -2194,6 +2209,25 @@ export const babylonRoutes = {
 
             return instance;
         }
+
+        //one big floor tile to save on scene complexity for the physics algo
+        physicsWorker.post('addPhysicsEntity',{
+            _id:'tile_0_0', //tie it to the first tile for cleanup
+            collisionType:'cuboid',
+            dimensions:floorDimensions,
+            restitution:1,
+            position:{
+                x:floorPosition.x,
+                y:floorPosition.y,
+                z:floorPosition.z
+            },
+            rotation:{
+                x:floorRotation._x,
+                y:floorRotation._y,
+                z:floorRotation._z,
+                w:floorRotation._w
+            }
+        });
 
         //need a pass to create columns
 

@@ -222,37 +222,26 @@ export async function createRenderer(
 
         physics.post('animateWorld', [true, true]);
 
+        let mapComplexity;
 
-        let offscreen = minimapelm?.transferControlToOffscreen();
+        const entityCt = 1000;
 
-        //create the maze and render the entities
-        physics.post('createMaze',
-            [
-                20,
-                20,
-                'huntandkill',
-                Math.random(),
-                true,
-                7,
-                1000,
-                physicsPort,
-                navPhysicsPort,
-                minimapPort,
-                offscreen || undefined
-            ],
-            undefined,
-            [offscreen]
-        );
+        let spotted = [] as string[];
+        physics.subscribe('onPlayerSeen',(entityId) => {
+            spotted.push(entityId);
 
-        //todo win/loss stats, cache long term play stats
-        renderer.subscribe('onWin',()=>{
-            alert("You won! F5 or refresh page to restart");
-        });
+            //play audio according to this
+            if(spotted.length === entityCt) {
 
-        renderer.subscribe('onDie',() => {
-            alert("You died! F5 or refresh page to restart");
-        });
+            } else if(spotted.length >= 2*entityCt/3) {
 
+            } else if (spotted.length >= entityCt/3) {
+
+            } else if (spotted.length >= 1) {
+
+            }
+        })
+        
         renderer.subscribe('onKeyPickup',(color) => {
             if(keyspan)
                 keyspan.innerHTML += `<span style="color:${color}; font-size:20px;">⚿</span>`
@@ -265,6 +254,38 @@ export async function createRenderer(
                 else if(newHP <= 5) hpbar.style.backgroundColor = 'yellow'; 
             }
         });
+
+        //todo win/loss stats, cache long term play stats
+        renderer.subscribe('onWin',({timeMs, startTime, endTime})=>{
+            alert("You won! F5 or refresh page to restart");
+        });
+
+        renderer.subscribe('onDie',({timeMs, startTime, endTime}) => {
+            alert("You died! F5 or refresh page to restart");
+        });
+
+
+        let offscreen = minimapelm?.transferControlToOffscreen();
+
+        //create the maze and render the entities
+        mapComplexity = await physics.run('createMaze',
+            [
+                20,
+                20,
+                'huntandkill',
+                Math.random(),
+                true,
+                7,
+                entityCt,
+                physicsPort,
+                navPhysicsPort,
+                minimapPort,
+                offscreen || undefined
+            ],
+            undefined,
+            [offscreen]
+        );
+
 
         //},1000)
     });

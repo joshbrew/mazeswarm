@@ -15,7 +15,9 @@ export const physicsRoutes = {
             RAPIER.init().then(() =>{
                 if(!gravity) gravity = { x: 0.0, y: -9.81, z:0 }; 
                 //for babylonjs we'll use y = -9.81 for correct world orientation
-                (this.__graph as WorkerService).world = new RAPIER.World(gravity,...args);
+                const world = new RAPIER.World(gravity,...args);
+                (this.__graph as WorkerService).world = world;
+
                 //(this.__graph as WorkerService).worldEvents = new RAPIER.EventQueue(true);
                 if(entities) {
                     let tags = entities.map((props) => {
