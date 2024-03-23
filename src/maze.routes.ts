@@ -320,15 +320,13 @@ export const mazeRoutes = {
         //await Promise.all(proms); //entity promises (not most efficient)
 
 
-        let animation; 
         let anim = () => {
             this.__graph.run('updatePhysicsEntitiesFromFlowFields', 1);
-            animation = requestAnimationFrame(anim);
+            this.__graph.flowUpdatesAnimation = requestAnimationFrame(anim);
         }
 
-        animation = requestAnimationFrame(anim);
+        this.__graph.flowUpdatesAnimation = requestAnimationFrame(anim);
 
-        let playerTracking;
 
         let timeout = () => {
             const player = this.__graph.get("player") as RAPIER.RigidBody;
@@ -350,10 +348,10 @@ export const mazeRoutes = {
                 }
             );
 
-            playerTracking = setTimeout(timeout, 500);// 500ms updates to flowfield
+            this.__graph.playerTracking = setTimeout(timeout, 500);// 500ms updates to flowfield
         }
 
-        playerTracking = setTimeout(timeout,500);
+        this.__graph.playerTracking = setTimeout(timeout, 500);
 
 
         renderThread.post(
@@ -450,7 +448,12 @@ export const mazeRoutes = {
 
     //reset maze and flow fields etc
     resetMaze: function() {
+        const maze = this.__graph.maze as Maze;
+        const world = this.__graph.world
+        clearTimeout(this.__graph.playerTracking);
+        cancelAnimationFrame(this.__graph.flowUpdatesAnimation);
 
+        
     },
 
     mirrorFlowField: function(
@@ -562,17 +565,7 @@ export const mazeRoutes = {
                 //const _id = 'blorb'+i; //todo: generalize
                 //let entity = this.__graph.get(_id) as RAPIER.RigidBody & { field: number, contacts:string[] };
                 const position = entity.position || entity.translation();              
-                if(
-                    Math.abs(position.x-player_p.x) < 1.5 && //if we're in the cell of the destination of the field
-                    Math.abs(position.z-player_p.z) < 1.5
-                ) {
-                    entity.field = 0;
-                    this.__graph.run(
-                        'onPlayerSeen',
-                        entity._id
-                    );
-                }
-
+                
                 if(!entity || typeof entity.field !== 'number') return;
                 //console.log(_id);
                 let fieldX = Math.floor(position.x*7/cellSize)+7;
