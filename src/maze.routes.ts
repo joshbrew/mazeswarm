@@ -2,10 +2,12 @@ import { AStarSolver } from './maze/astar';
 import { Maze } from './maze/maze'
 import { FlowField } from './maze/flowfield'
 
-import { generateHuntAndKillWithBraidsMaze, noDeadEndsSpiral } from './maze/generators'
+import * as generators from './maze/generators'
 import { WorkerService, isTypedArray } from 'graphscript';
 import { PhysicsEntityProps, PhysicsMesh } from './types';
 import RAPIER from '@dimforge/rapier3d-compat';
+
+type GeneratorsKeys = keyof typeof generators;
 
 export const mazeRoutes = {
 
@@ -13,7 +15,7 @@ export const mazeRoutes = {
     createMaze:async function(
         width=20,
         height=20,
-        type:'huntandkill'|'spiral'='huntandkill',
+        type:GeneratorsKeys='generateHuntAndKillWithBraidsMaze',
         seed,
         allowDiagonal,
         nFields = 7, //number of flowfields, field 0 targets player, rest of fields reserved for w/e
@@ -24,9 +26,14 @@ export const mazeRoutes = {
         minimapCanvas:OffscreenCanvas
     ) {
 
-        let generator = type === 'huntandkill' ? generateHuntAndKillWithBraidsMaze : noDeadEndsSpiral;
+        let generator = generators[type];
         //create a maze grid with a desired generator function,
         let maze = new Maze(width,height,generator,()=>{},seed,allowDiagonal);
+
+        this.__graph.physicsPort = physicsPort;
+        this.__graph.navPhysicsPort = navPhysicsPort;
+        this.__graph.minimapPort = minimapPort;
+
 
         const navThread = (this.__graph as WorkerService).workers[navPhysicsPort];
         const renderThread = (this.__graph as WorkerService).workers[physicsPort];
@@ -307,8 +314,12 @@ export const mazeRoutes = {
             this.__graph.blorbs.push(this.__graph.get(_id));
         }
 
+        this.__graph.win = false;
+
         renderThread.subscribe('onWin',()=>{
             
+            this.__graph.win = true;
+
             if(this.__graph.blorbs) {
                 this.__graph.blorbs.forEach((entity) => {
                     let newField = nFields > 1 ? Math.floor(Math.random()*(nFields-1)) || 1 : 0; 
@@ -448,12 +459,14 @@ export const mazeRoutes = {
 
     //reset maze and flow fields etc
     resetMaze: function() {
-        const maze = this.__graph.maze as Maze;
-        const world = this.__graph.world
+
         clearTimeout(this.__graph.playerTracking);
         cancelAnimationFrame(this.__graph.flowUpdatesAnimation);
 
-        
+        const physicsPort = this.__graph.physicsPort;
+        const renderThread = (this.__graph as WorkerService).workers[physicsPort];
+
+        return renderThread.run('clearMaze');
     },
 
     mirrorFlowField: function(
@@ -566,7 +579,7 @@ export const mazeRoutes = {
                 //let entity = this.__graph.get(_id) as RAPIER.RigidBody & { field: number, contacts:string[] };
                 const position = entity.position || entity.translation();              
                 
-                if( entity.field !== 0 && 
+                if( entity.field !== 0 && !this.__graph.win &&
                     Math.abs(position.x-player_p.x) < 1.5 && //if we're in the cell of the destination of the field
                     Math.abs(position.z-player_p.z) < 1.5
                 ) {
@@ -608,7 +621,7 @@ export const mazeRoutes = {
                             //todo give up if rotating thru but this should not be the case in our solution
                         }
                         const newField = a[Math.floor(Math.random()*a.length)];
-                        entity.field = newField; //new destination
+                        entity.field = newField || 1; //new destination
                         //console.log('new goal',newField,_id);
                     }
                 }

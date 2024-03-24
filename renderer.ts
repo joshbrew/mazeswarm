@@ -272,7 +272,7 @@ export async function createRenderer(
             [
                 20,
                 20,
-                'huntandkill',
+                undefined, //maze type
                 Math.random(),
                 true,
                 7,

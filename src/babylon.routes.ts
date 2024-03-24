@@ -65,91 +65,7 @@ export const babylonRoutes = {
                     }
                 }
                  
-                //const engine = new BABYLON.WebGPUEngine(canvas);//new BABYLON.Engine(canvas);
-                const engine = new BABYLON.Engine(canvas);
-                //return new Promise((res) => {
-                //    engine.initAsync().then(()=>{
-                        const scene = new BABYLON.Scene(engine);
-                        scene.clearColor = new BABYLON.Color4(0,0,0,1);
-                        ctx.engine = engine;
-                        ctx.scene = scene;
-                        ctx.camera = this.__graph.run('attachFreeCamera', ctx);
-                        ctx.animations = {};
-
-                        ctx.keys = {}; //for maze key objects
-                        ctx.doors = {}; //for maze door objects
-
-                        ctx.playerHP = 10; //10 seconds of contact time
-
-                        const cameraControls = this.__graph.run('addCameraControls', 0.5, ctx); //default camera controls
-        
-                        canvas.addEventListener('resize', () => { 
-                            engine.setSize(canvas.clientWidth,canvas.clientHeight); //manual resize
-                        });
-        
-                        //update internal scene info
-                        canvas.addEventListener('mousemove', (ev) => {
-                            scene.pointerX = ev.clientX;
-                            scene.pointerY = ev.clientY;
-                        });
-        
-                        //scene picking
-                        canvas.addEventListener('mousedown', (ev) => {
-                            if(ctx.controls?.mode !== 'player') {
-                                let picked = scene.pick(scene.pointerX, scene.pointerY);
-        
-                                if(picked.pickedMesh?.name === 'player' && ctx.controls?.mode !== 'player') {
-                                    
-                                    this.__graph.run(
-                                        'addPlayerControls', 
-                                        'player', 
-                                        2, 
-                                        'topdown', 
-                                        ctx
-                                    );
-                                    //console.log(picked.pickedMesh);
-                                } 
-                            }
-                                
-                        });
-        
-                        setTimeout(() => { 
-                            engine.setSize(canvas.clientWidth,canvas.clientHeight);  
-                        }, 100);
-        
-                        const light = new BABYLON.SpotLight(
-                            'light1', 
-                            new BABYLON.Vector3(0,75,0),
-                            new BABYLON.Vector3(0,-1,0),
-                            Math.PI/2,
-                            2,
-                            scene
-                        );
-
-                        light.shadowEnabled = true;
-                        const shadowGenerator = new BABYLON.ShadowGenerator(2048,light);
-                        ctx.shadowGenerator = shadowGenerator;
-                        shadowGenerator.usePoissonSampling = true;
-                        
-                        ctx.shadowMap = shadowGenerator.getShadowMap();
-
-                        //(scene as any)._skipFrustumClipping = true
-        
-                        let entityNames = [] as any;
-        
-                        if(ctx.entities) { //settings passed from main thread as PhysicsEntityProps[]
-                            let meshes = ctx.entities.map((e,i) => {
-                                let mesh = scene.getNodeById(this.__graph.run('addEntity', e, ctx, true)); 
-                                entityNames[i] = e._id;
-                                return mesh;
-                            }) as BABYLON.Mesh[];
-                            ctx.entities = meshes;
-                        }
-                        return entityNames;
-                //       res(entityNames);
-                //    });
-                //});
-                
+                this.__graph.run('initEngine', ctx);
             },
             draw:function (self:WorkerCanvas,canvas,context) {
                 this.__graph.run('renderScene', self);
@@ -161,10 +77,10 @@ export const babylonRoutes = {
                 }}|number[]
             ) {
                 this.__graph.run('updateBabylonEntities', data);
-            },
-            clear:function (self:WorkerCanvas, canvas, context) {
-                self.scene.dispose();
-            }
+            }//,
+            // clear:function (self:WorkerCanvas, canvas, context) {
+            //     self.scene.dispose();
+            // }
         };
 
         Object.assign(options,BabylonCanvasProps);
@@ -196,37 +112,134 @@ export const babylonRoutes = {
 
     },
     initEngine:function ( //run this on the secondary thread
-        ctx?:string|WorkerCanvas|{[key:string]:any}
+        ctx?:any
     ){
         if(!ctx || typeof ctx === 'string')
             ctx = this.__graph.run('getCanvas',ctx);
 
         if(typeof ctx !== 'object') ctx = {};
         
-        const canvas = ctx.canvas ? ctx.canvas : new OffscreenCanvas(100,100);
-        const engine = new BABYLON.Engine(canvas);
-        const scene = new BABYLON.Scene(engine);
+        //const engine = new BABYLON.WebGPUEngine(canvas);//new BABYLON.Engine(canvas);
+        const engine = new BABYLON.Engine(ctx.canvas);
+        //return new Promise((res) => {
+        //    engine.initAsync().then(()=>{
+                const scene = new BABYLON.Scene(engine);
+                scene.clearColor = new BABYLON.Color4(0,0,0,1);
+                ctx.engine = engine;
+                ctx.scene = scene;
+                ctx.camera = this.__graph.run('attachFreeCamera', ctx);
+                ctx.animations = {};
 
-        ctx.canvas = canvas;
-        ctx.engine = engine;
-        ctx.scene = scene;
+                ctx.keys = {}; //for maze key objects
+                ctx.doors = {}; //for maze door objects
 
-        //duplicating for secondary engine threads (in our case for running a standalone navmesh/crowd animation thread) 
-        if(!ctx._id) ctx._id = `canvas${Math.floor(Math.random()*1000000000000000)}`;
+                ctx.playerHP = 10; //10 seconds of contact time
 
-        if(!this.__graph.CANVASES) 
-            this.__graph.CANVASES = {} as { [key:string]:WorkerCanvas };
-        if(!this.__graph.CANVASES[ctx._id]) 
-            this.__graph.CANVASES[ctx._id] = ctx;
+                const cameraControls = this.__graph.run('addCameraControls', 0.5, ctx); //default camera controls
 
-        if(ctx.entities) {
-            let names = ctx.entities.map((e,i) => {
-                return this.__graph.run('addEntity', e, (ctx as any)._id, true);
-            });
+                ctx.canvas.addEventListener('resize', () => { 
+                    engine.setSize(ctx.canvas.clientWidth,ctx.canvas.clientHeight); //manual resize
+                });
 
-            return names;
-        }
+                //update internal scene info
+                ctx.canvas.addEventListener('mousemove', (ev) => {
+                    scene.pointerX = ev.clientX;
+                    scene.pointerY = ev.clientY;
+                });
 
+                //scene picking
+                ctx.canvas.addEventListener('mousedown', (ev) => {
+                    if(ctx.controls?.mode !== 'player') {
+                        let picked = scene.pick(scene.pointerX, scene.pointerY);
+
+                        if(picked.pickedMesh?.name === 'player' && ctx.controls?.mode !== 'player') {
+                            
+                            this.__graph.run(
+                                'addPlayerControls', 
+                                'player', 
+                                2, 
+                                'topdown', 
+                                ctx
+                            );
+                            //console.log(picked.pickedMesh);
+                        } 
+                    }
+                        
+                });
+
+                setTimeout(() => { 
+                    engine.setSize(ctx.canvas.clientWidth,ctx.canvas.clientHeight);  
+                }, 100);
+
+                const light = new BABYLON.SpotLight(
+                    'light1', 
+                    new BABYLON.Vector3(0,75,0),
+                    new BABYLON.Vector3(0,-1,0),
+                    Math.PI/2,
+                    2,
+                    scene
+                );
+
+                light.shadowEnabled = true;
+                const shadowGenerator = new BABYLON.ShadowGenerator(2048,light);
+                ctx.shadowGenerator = shadowGenerator;
+                shadowGenerator.usePoissonSampling = true;
+                
+                ctx.shadowMap = shadowGenerator.getShadowMap();
+
+                //(scene as any)._skipFrustumClipping = true
+
+                let entityNames = [] as any;
+
+                if(ctx.entities) { //settings passed from main thread as PhysicsEntityProps[]
+                    let meshes = ctx.entities.map((e,i) => {
+                        let mesh = scene.getNodeById(this.__graph.run('addEntity', e, ctx, true)); 
+                        entityNames[i] = e._id;
+                        return mesh;
+                    }) as BABYLON.Mesh[];
+                    ctx.entities = meshes;
+                }
+                return entityNames;
+        //       res(entityNames);
+        //    });
+        //});
+
+    },
+    suspendAnimation:function(
+        ctx?:string|WorkerCanvas|{[key:string]:any}
+    ) {
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return;
+
+        (ctx as WorkerCanvas).stop();
+    },
+    startAnimation:function(
+        ctx?:string|WorkerCanvas|{[key:string]:any}
+    ) {
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return;
+
+        (ctx as WorkerCanvas).start();
+    },
+    deinit(
+        ctx?:string|WorkerCanvas|{[key:string]:any}
+    ) {
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return;
+
+        const scene = ctx.scene as BABYLON.Scene;
+
+        scene.dispose();
+
+        delete ctx.entities;
+        delete ctx.instances;
+        
     },
     //can also use physics thread to sphere cast/get intersections
     rayCast: function (
@@ -250,18 +263,36 @@ export const babylonRoutes = {
 
         return scene?.pickWithRay(new BABYLON.Ray(origin,direction,length), filter);
     },
-    onWin(timeMs:number,utcStart:number,utcEnd:number) { //report stats
+    onWin:function(timeMs:number,utcStart:number,utcEnd:number) { //report stats
         return {timeMs, utcStart, utcEnd};
     }, //subscribe
-    onDie(timeMs:number,utcStart:number,utcEnd:number) { //report stats
+    onDie:function(timeMs:number,utcStart:number,utcEnd:number) { //report stats
         return {timeMs, utcStart, utcEnd};
     }, //subscribe
-    onHPLoss(newHP) {//subscribe
+    onHPLoss:function(newHP) {//subscribe
         return newHP;
     }, 
-    onKeyPickup(color) {//subscribe
+    onKeyPickup:function(color) {//subscribe
         return color;
     }, 
+    clearControls:function(
+        ctx?:string|WorkerCanvas
+    ) {
+        if(!ctx || typeof ctx === 'string')
+            ctx = this.__graph.run('getCanvas',ctx);
+
+        if(typeof ctx !== 'object') return undefined;
+        
+        const scene = ctx.scene as BABYLON.Scene;
+
+        if(ctx.cameraobs) {
+            scene.onBeforeRenderObservable.remove(ctx.cameraobs);
+            delete ctx.cameraobs;
+        }
+        this.__graph.run('removeControls', ctx.controls, ctx);
+        //ctx.controls = this.__graph.run('addCameraControls', 0.5, ctx);
+ 
+    },
     addPlayerControls:function(
         meshId:string,
         maxSpeed:number=0.5,
@@ -415,7 +446,7 @@ export const babylonRoutes = {
                 }
             });
 
-            cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
+            ctx.cameraobs = obs as BABYLON.Observer<BABYLON.Scene>;
          
         }
 
@@ -444,7 +475,10 @@ export const babylonRoutes = {
 
         let cleanupControls = () => {
             if(typeof ctx === 'object') {
-                if(cameraobs) scene.onBeforeRenderObservable.remove(cameraobs);
+                if(ctx.cameraobs) {
+                    scene.onBeforeRenderObservable.remove(ctx.cameraobs);
+                    delete ctx.cameraobs;
+                }
                 this.__graph.run('removeControls', ctx.controls, ctx);
                 ctx.controls = this.__graph.run('addCameraControls', 0.5, ctx);
             }   
@@ -2365,16 +2399,16 @@ export const babylonRoutes = {
     },
 
     // Function to clear all wall and floor instances from the scene
-    clearWallsAndFloors: function(ctx?) {
+    clearMaze: function(ctx?) {
         if(!ctx || typeof ctx === 'string')
             ctx = this.__graph.run('getCanvas',ctx);
 
-        const physicsPort = ctx.physicsPort;
-        const physics = this.__graph.workers[physicsPort] as WorkerInfo;
+        // const physicsPort = ctx.physicsPort;
+        // const physics = this.__graph.workers[physicsPort] as WorkerInfo;
 
         // Filter all meshes that are instances of walls and floors
         (ctx.scene as BABYLON.Scene).meshes.filter(mesh => {
-            if(mesh.name.includes('wall_') || mesh.name.includes('tile_')) {
+            if(mesh.id.includes('wall_') || mesh.id.includes('tile_') || mesh.id.includes('blorb') || mesh.id.includes('player')) {
                 this.__graph.run('removeEntity', mesh.name);
                 return true;
             }

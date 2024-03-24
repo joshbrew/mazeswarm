@@ -29,7 +29,7 @@ then
 
 ### About
 
-Rapier3D: fancy Rust -> JS WASM physics engine, it's faster than anything else free except maybe the updated Havok plugin for BabylonJS which has first class support. Only thing Babylon needs now is proper lighting :P
+Rapier3D: fancy Rust -> JS WASM physics engine, it's faster than anything else free except maybe the updated Havok plugin for BabylonJS which has first class support. Only thing Babylon needs now is proper lighting :P Rapier could use better raw buffer access for quicker reads/writes.
 
 Benchmarks: https://www.dimforge.com/blog/2020/08/25/announcing-the-rapier-physics-engine/
 
@@ -37,14 +37,14 @@ BabylonJS: fancy JS rendering engine, including lots of extras. Little fatter th
 
 Homemade Maze generation with Flowfield pathfinding for efficient swarm physics. AStar is used to generate door and key placements to ensure it's always solvable.
 
-Runs at 60-100fps no problem on my laptop, plenty could be further optimized as well as quality of life improvements to the code organization but we worked hot and fast to make this functional.
+Runs at 60-120fps no problem on my laptop, plenty could be further optimized as well as quality of life improvements to the code organization but we worked hot and fast to make this functional.
 
 
 ### Benchmark
 
-![benchmark](./benchmark_2.png)
+![benchmark](./benchmark_3.png)
 
-Current benchmarks on an RTX3070 + i7-10750H. Tasks running in 8-11 microseconds with ~4000 3D entities. CPU time can be minimized on BabylonJS to increase render complexity. Swapping in WebGPU will be a major boost, which should work better with the 7.0 update in a week, but we are stuck with single threaded physics bottlenecks. This is good enough for 60-90fps gameplay. The GPU calls by comparison are less than half a microsecond (~0.32ms average) so it's not a rendering issue at all. 
+Current benchmarks on an RTX3070 + i7-10750H. Tasks running in 7-11 microseconds with ~4000 3D entities (with floor represented as 1 physics plane). CPU time can be further minimized on BabylonJS to increase render complexity. Swapping in WebGPU will be a major boost, which should work better with the 7.0 update in a week, but we are stuck with single threaded physics bottlenecks. This is good enough for 60-120fps gameplay. The GPU calls by comparison are less than half a microsecond (~0.32ms average) so it's not a rendering issue at all. 
 
 ![benchmark](./benchmark.png)
 

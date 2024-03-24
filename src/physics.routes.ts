@@ -34,6 +34,15 @@ export const physicsRoutes = {
             });
         });
     },
+    clearWorld:function () {
+        const world = this.__graph.world as RAPIER.World;
+
+        world.bodies.forEach((bod) => {
+            world.removeRigidBody(bod);
+        });
+
+        world.free();
+    },
     addPhysicsEntity:function (
         settings:PhysicsEntityProps
     ) {

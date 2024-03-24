@@ -19,8 +19,13 @@ import {
     WorkerService, 
     htmlloader, 
     workerCanvasRoutes,
-    Loader
+    Loader,
+    HTMLNodeProperties
 } from 'graphscript' //'../graphscript/index'//
+
+import * as generators from './src/maze/generators'
+
+const generatorkeys = Object.keys(generators);
 
 // import {PhysicsEntityProps} from './workers/types'
 // import physicsworker from './workers/physics.worker'
@@ -46,165 +51,26 @@ let graph = new WorkerService({
                 const hpbar = document.getElementById('hpbar') as HTMLProgressElement;
                 const keyspan = document.getElementById('keys') as HTMLSpanElement;
 
+                const resetbutton = document.getElementById('reset') as HTMLButtonElement;
+
                 minimap.width = 800;
                 minimap.height = 800;
                 createRenderer(
-                    elm,
+                    elm as HTMLCanvasElement,
                     this,
                     graph,
                     undefined,
-                    // [
-                    //     {
-                    //         _id:'ball1',
-                    //         collisionType:'ball',
-                    //         radius:1,
-                    //         dynamic:true,
-                    //         instance:true,
-                    //         restitution:0.1,
-                    //         position:{x:3,y:2,z:3},
-                    //         impulse:{x:0,y:0,z:0},
-                    //         crowd:'zombies'
-                    //         //force:{x:0,y:0,z:30}
-                    //     },
-                    //     {
-                    //         _id:'ball2',
-                    //         collisionType:'ball',
-                    //         radius:1,
-                    //         dynamic:true,
-                    //         instance:true,
-                    //         restitution:0.1,
-                    //         position:{x:0,y:15,z:5},
-                    //         impulse:{x:0,y:15,z:-20},
-                    //         crowd:'zombies'
-                    //     },
-                    //     {
-                    //         _id:'ball3',
-                    //         collisionType:'ball',
-                    //         radius:1,
-                    //         dynamic:true,
-                    //         instance:true,
-                    //         restitution:0.1,
-                    //         position:{x:0,y:12,z:7},
-                    //         impulse:{x:0,y:15,z:-20},
-                    //         crowd:'zombies'
-                    //     },
-                    //     {
-                    //         _id:'ball4',
-                    //         collisionType:'ball',
-                    //         radius:1,
-                    //         dynamic:true,
-                    //         instance:true,
-                    //         restitution:0.1,
-                    //         position:{x:0,y:11,z:6},
-                    //         impulse:{x:0,y:15,z:-20},
-                    //         crowd:'zombies'
-                    //     },
-                    //     {
-                    //         _id:'capsule1', //kinda jank
-                    //         collisionType:'capsule',
-                    //         radius:1,
-                    //         halfHeight:1,
-                    //         dynamic:true,
-                    //         restitution:0.5,
-                    //         position:{x:0,y:5,z:-3},
-                    //         rotation:{x:1,y:0,z:0,w:1},
-                    //         targetOf:'zombies'
-                    //         //impulse:{x:0,y:0,z:30}
-                    //     },
-                    //     {
-                    //         _id:'box1', //kinda jank
-                    //         collisionType:'cuboid',
-                    //         dimensions:{width:2,height:2,depth:2},
-                    //         dynamic:true,
-                    //         instance:true,
-                    //         restitution:0.1,
-                    //         position:{x:-3,y:15,z:3},
-                    //         //impulse:{x:0,y:0,z:0}
-                    //     },
-                    //     {
-                    //         _id:'ground',
-                    //         collisionType:'cuboid',
-                    //         dimensions:{width:10,height:1,depth:10},
-                    //         dynamic:false,
-                    //         restitution:1,
-                    //         position:{x:0,y:0,z:0},
-                    //         navMesh:true
-                    //     },
-                    //     {
-                    //         _id:'leftwall',
-                    //         collisionType:'cuboid',
-                    //         dimensions:{width:10,height:10,depth:1},
-                    //         dynamic:false,
-                    //         restitution:1,
-                    //         position:{x:0,y:5,z:-5},
-                    //         navMesh:true
-                    //     },
-                    //     {
-                    //         _id:'rightwall',
-                    //         collisionType:'cuboid',
-                    //         dimensions:{width:10,height:10,depth:1},
-                    //         dynamic:false,
-                    //         restitution:1,
-                    //         position:{x:0,y:5,z:5},
-                    //         navMesh:true
-                    //     },
-                    //     {
-                    //         _id:'ground2',
-                    //         collisionType:'cuboid',
-                    //         dimensions:{width:100,height:1,depth:100},
-                    //         dynamic:false,
-                    //         restitution:1,
-                    //         position:{x:0,y:-10,z:0},
-                    //         navMesh:true
-                    //     },
-                    //     {
-                    //         _id:'leftgwall',
-                    //         collisionType:'cuboid',
-                    //         dimensions:{width:100,height:5,depth:1},
-                    //         dynamic:false,
-                    //         restitution:1,
-                    //         position:{x:0,y:-7.5,z:-50},
-                    //         navMesh:true
-                    //     },
-                    //     {
-                    //         _id:'rightgwall',
-                    //         collisionType:'cuboid',
-                    //         dimensions:{width:100,height:5,depth:1},
-                    //         dynamic:false,
-                    //         restitution:1,
-                    //         position:{x:0,y:-7.5,z:50},
-                    //         navMesh:true
-                    //     },
-                    //     {
-                    //         _id:'frontgwall',
-                    //         collisionType:'cuboid',
-                    //         dimensions:{width:1,height:5,depth:100},
-                    //         dynamic:false,
-                    //         restitution:1,
-                    //         position:{x:-50,y:-7.5,z:0},
-                    //         navMesh:true
-                    //     },
-                    //     {
-                    //         _id:'backgwall',
-                    //         collisionType:'cuboid',
-                    //         dimensions:{width:1,height:5,depth:100},
-                    //         dynamic:false,
-                    //         restitution:1,
-                    //         position:{x:50,y:-7.5,z:0},
-                    //         navMesh:true
-                    //     }
-                    // ]
                     minimap,
                     hpbar,
                     keyspan
                 );
             }
-        },
+        } as HTMLNodeProperties,
         'intromessage':{
             __element:'span',
             style:{
                 position:'absolute',
-                zIndex:10,
+                zIndex:'10',
                 left:'50%',
                 fontSize:'60px',
                 color:'white',
@@ -223,7 +89,7 @@ let graph = new WorkerService({
                     elm.style.display = 'none';
                 },4000);
             }
-        },
+        } as HTMLNodeProperties,
         'minimap':{
             __element:'canvas',
             style:{
@@ -236,7 +102,7 @@ let graph = new WorkerService({
                 pointerEvents:'none', 
                 backgroundColor:'black'
             }
-        },
+        } as HTMLNodeProperties,
         'hpspan':{
             __element:'span',
             __children:{
@@ -247,7 +113,7 @@ let graph = new WorkerService({
                         fontSize:'10px',
                         backgroundColor:'rgba(10,10,10,0.75)'
                     }
-                },
+                } as HTMLNodeProperties,
                 'hpbar':{
                     __element:'progress',
                     style:{
@@ -257,7 +123,7 @@ let graph = new WorkerService({
                     },
                     value:'10',
                     max:'10'
-                }
+                } as HTMLNodeProperties
             }, 
             style:{
                 position:'absolute',
@@ -265,7 +131,7 @@ let graph = new WorkerService({
                 top:'10px',
                 left:'10px',
             },
-        },
+        } as HTMLNodeProperties,
         'keys': {
             __element:'span',
             style:{
@@ -274,11 +140,19 @@ let graph = new WorkerService({
                 top:'35px',
                 left:'10px'
             }
-        },
+        } as HTMLNodeProperties,
         'controlsRef':{
             __element:'div',
             style:{fontFamily:'consolas'},
             innerHTML:`
+                <button id="reset">Reset</button>
+                <select id="generators">
+                    ${generatorkeys.map((v) => `<option value="${v}" ${v === 'generateHuntAndKillWithBraidsMaze' ? 'selected' : ''}>${v}</option>`)}
+                </select>
+                X Dimensions:<input type="number" value="20">
+                Y Dimensions:<input type="number" value="20">
+                Cell Size: <input type="number" value ="1">
+                Enemy Count: <input type="number" value="1000">
                 MazeSwarm Controls:<br><br>
                 WASD or Arrows: Move Free Camera<br/>
                 Shift: Sprint (double speed)<br/>
@@ -292,8 +166,8 @@ let graph = new WorkerService({
                 Backspace: Release Control back to Free Camera<br/>
                 <br/>
                 Note this is all rough draft, we did not finish the graphics or audio just the basic win/loss gameplay. Expect jank and limited engagement factor.
-                `
-        }
+            `
+        } as HTMLNodeProperties
 
         // testbox:{
         //     __element:'div',
